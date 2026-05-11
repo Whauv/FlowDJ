@@ -1,102 +1,110 @@
-import { useEffect } from "react";
-import { useAppStore } from "../../state/useAppStore";
+import { useEffect, useMemo, useRef } from "react";
 import type { DeckId } from "../../state/types";
-
-export type ShortcutAction =
-  | "loadDeckA"
-  | "loadDeckB"
-  | "togglePlayA"
-  | "togglePlayB"
-  | "seekBack"
-  | "seekForward"
-  | "volumeUp"
-  | "volumeDown"
-  | "crossfaderLeft"
-  | "crossfaderRight"
-  | "masterUp"
-  | "masterDown"
-  | "cue"
-  | "loop"
-  | "autoloop"
-  | "activeDeck"
-  | "modeBrowse"
-  | "modeMix"
-  | "modeFx"
-  | "modeRecovery";
-
-export interface ShortcutMapping {
-  [key: string]: ShortcutAction;
-}
+import type { FlowMode, KeyboardAction, KeyboardLegendItem, KeyProfile, MappingEntry } from "./types";
 
 interface KeyboardHandlers {
-  onAction: (action: ShortcutAction, activeDeck: DeckId) => void;
+  mode: FlowMode;
+  activeDeck: DeckId;
+  profile: KeyProfile;
+  onAction: (action: KeyboardAction, deckId: DeckId) => void;
 }
 
-const defaultMapping: ShortcutMapping = {
-  KeyQ: "loadDeckA",
-  KeyP: "loadDeckB",
-  KeyZ: "togglePlayA",
-  KeyX: "togglePlayB",
-  ArrowLeft: "seekBack",
-  ArrowRight: "seekForward",
-  KeyA: "volumeDown",
-  KeyS: "volumeUp",
-  Comma: "crossfaderLeft",
-  Period: "crossfaderRight",
-  KeyN: "masterDown",
-  KeyM: "masterUp",
-  KeyC: "cue",
-  KeyL: "loop",
-  KeyK: "autoloop",
-  Tab: "activeDeck",
-  Digit1: "modeBrowse",
-  Digit2: "modeMix",
-  Digit3: "modeFx",
-  Digit4: "modeRecovery"
-};
+const ACTION_DEBOUNCE_MS = 120;
+const DANGEROUS_HOLD_MS = 1200;
 
-export class KeyboardManager {
-  private mapping: ShortcutMapping;
-
-  constructor(mapping: ShortcutMapping = defaultMapping) {
-    this.mapping = mapping;
-  }
-
-  resolveAction(event: KeyboardEvent): ShortcutAction | null {
-    return this.mapping[event.code] ?? null;
-  }
+function makeLookup(entries: MappingEntry[]): Record<string, KeyboardAction> {
+  return entries.reduce<Record<string, KeyboardAction>>((acc, entry) => {
+    acc[entry.code] = entry.action;
+    return acc;
+  }, {});
 }
 
-export const keyboardManager = new KeyboardManager();
+export function detectMappingConflicts(profile: KeyProfile): string[] {
+  const conflicts: string[] = [];
+  (Object.keys(profile.mappings) as FlowMode[]).forEach((mode) => {
+    const seen = new Map<string, KeyboardAction>();
+    profile.mappings[mode].forEach((entry) => {
+      const existing = seen.get(entry.code);
+      if (existing && existing !== entry.action) {
+        conflicts.push(`${mode.toUpperCase()}: ${entry.code}`);
+      }
+      seen.set(entry.code, entry.action);
+    });
+  });
+  return conflicts;
+}
 
-export function useKeyboardShortcuts({ onAction }: KeyboardHandlers): void {
-  const activeDeck = useAppStore((s) => s.activeDeck);
-  const setMode = useAppStore((s) => s.setMode);
-  const setActiveDeck = useAppStore((s) => s.setActiveDeck);
+export function getLegendForMode(profile: KeyProfile, mode: FlowMode): KeyboardLegendItem[] {
+  return profile.mappings[mode].map((entry) => ({
+    action: entry.action,
+    code: entry.code,
+    label: entry.label,
+    description: entry.description
+  }));
+}
+
+export function useKeyboardShortcuts({ mode, activeDeck, profile, onAction }: KeyboardHandlers): void {
+  const lastActionRef = useRef<Map<KeyboardAction, number>>(new Map());
+  const holdStartRef = useRef<Map<string, number>>(new Map());
+
+  const lookup = useMemo(() => makeLookup(profile.mappings[mode]), [profile, mode]);
 
   useEffect(() => {
-    const handler = (event: KeyboardEvent) => {
-      const action = keyboardManager.resolveAction(event);
-      if (!action) {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) {
         return;
       }
 
-      if (event.target instanceof HTMLInputElement) {
+      const action = lookup[event.code];
+      if (!action) {
         return;
       }
 
       event.preventDefault();
 
-      if (action === "modeBrowse") return setMode("browse");
-      if (action === "modeMix") return setMode("mix");
-      if (action === "modeFx") return setMode("fx");
-      if (action === "modeRecovery") return setMode("recovery");
-      if (action === "activeDeck") return setActiveDeck(activeDeck === "A" ? "B" : "A");
+      if (event.repeat && action !== "recoveryKillSwitch") {
+        return;
+      }
 
+      if (action === "recoveryKillSwitch") {
+        if (!holdStartRef.current.has(event.code)) {
+          holdStartRef.current.set(event.code, Date.now());
+        }
+        return;
+      }
+
+      const now = Date.now();
+      const last = lastActionRef.current.get(action) ?? 0;
+      if (now - last < ACTION_DEBOUNCE_MS) {
+        return;
+      }
+
+      lastActionRef.current.set(action, now);
       onAction(action, activeDeck);
     };
 
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, [activeDeck, onAction, setActiveDeck, setMode]);
+    const onKeyUp = (event: KeyboardEvent) => {
+      const action = lookup[event.code];
+      if (action !== "recoveryKillSwitch") {
+        return;
+      }
+
+      const start = holdStartRef.current.get(event.code);
+      holdStartRef.current.delete(event.code);
+      if (!start) {
+        return;
+      }
+
+      if (Date.now() - start >= DANGEROUS_HOLD_MS) {
+        onAction("recoveryKillSwitch", activeDeck);
+      }
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    window.addEventListener("keyup", onKeyUp);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("keyup", onKeyUp);
+    };
+  }, [activeDeck, lookup, onAction]);
 }

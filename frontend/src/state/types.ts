@@ -18,8 +18,13 @@ export interface DeckState {
   error: string | null;
 }
 
-export interface KeyboardShortcut {
-  action: string;
-  combo: string;
-  description: string;
+export interface FxState {
+  slot1Active: boolean;
+  slot2Active: boolean;
+  momentaryActive: boolean;
+}
+
+export interface EqState {
+  lowCut: boolean;
+  highCut: boolean;
 }
