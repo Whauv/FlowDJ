@@ -1,69 +1,58 @@
-# FlowDJ (Phase 7 FlowLight Lighting Sync Architecture)
+# FlowDJ (Phase 8 BPM + Phrase-Driven Lighting)
 
-FlowDJ now includes FlowLight, a music-to-light architecture synchronized to DJ deck state.
+FlowLight now runs a rule-based musical lighting engine synchronized to DJ playback state.
 
-## Goal Achieved
-Lighting sync is driven by real DJ engine state (BPM/deck/crossfader/phrase/energy), not only raw volume.
+## Phase 8 Features
+- BPM-driven movement speed
+- Beat-synced pulse behavior
+- Phrase-based scene changes
+- Distinct looks for:
+  - intro
+  - buildup
+  - drop
+  - breakdown
+  - outro
+- Deck-aware emphasis (dominant deck gets stronger focus)
+- Crossfader-aware blending of fixture emphasis
+- Intensity scaling from energy estimate
+- Optional strobe behavior gated to approved moments (build/drop)
 
-## FlowLight Architecture
-### Core modules
-- `frontend/src/modules/flowlight/eventBus.ts`
-  - DJ-to-light event bus
+## Safety + Intentionality
+- No random flashing logic
+- Scene changes use deterministic phrase mapper
+- Strobe can be disabled globally
+- Safety intensity cap prevents overly aggressive output
+
+## User Controls (FlowLight Preview)
+- Movement sensitivity
+- Intensity scale
+- Beat pulse strength
+- Safety limit
+- Allow strobe toggle
+- Strobe only on drops/build toggle
+
+## Architecture
+### Rule engine
 - `frontend/src/modules/flowlight/sceneEngine.ts`
-  - Scene selection + fixture rendering logic
+  - phrase-to-scene mapper
+  - BPM/beat/crossfader/deck/energy-driven fixture rendering
+
+### State manager + adapters
 - `frontend/src/modules/flowlight/manager.ts`
-  - Lighting state manager + adapter fanout
-- `frontend/src/modules/flowlight/types.ts`
-  - Shared lighting contracts
+  - event-driven state manager with live settings updates
 - `frontend/src/modules/flowlight/adapters.ts`
-  - Output adapter interfaces + placeholders
+  - DMX placeholder
+  - Philips Hue placeholder
+  - MIDI/clock placeholder
 
-### Output adapters (placeholders)
-- DMX placeholder adapter
-- Philips Hue placeholder adapter
-- Generic MIDI/clock placeholder adapter
+### Event bus hookup
+- `frontend/src/modules/flowlight/eventBus.ts`
+- `frontend/src/app/App.tsx`
+  - publishes phrase/beat/deck state from live playback loop
 
-No hardware is required for this phase.
+### Virtual preview
+- `frontend/src/components/lighting/FlowLightPreviewPanel.tsx`
+  - virtual fixtures synced to playback
 
-## DJ Event Bus Inputs Used
-- BPM
-- beat phase
-- phrase section (build/drop/groove/breakdown)
-- active deck
-- crossfader position
-- energy level
-- markers (build/drop/breakdown)
-- optional key-to-color mapping
-
-## Virtual Lighting Preview
-- UI panel: `frontend/src/components/lighting/FlowLightPreviewPanel.tsx`
-- Shows virtual fixtures with:
-  - intensity
-  - color
-  - pan/tilt
-  - active scene name
-
-## Integration Hookup
-- App publishes DJ state events into FlowLight event bus from `frontend/src/app/App.tsx`
-- FlowLight manager consumes events, updates scene state, and fans out to adapters
-- Preview panel renders current virtual fixture state
-
-## Extensibility for Real Integrations
-Adapters follow a shared interface:
-- `connect()`
-- `disconnect()`
-- `sendState(state)`
-
-To add real hardware:
-1. Implement `LightOutputAdapter` for target system.
-2. Register adapter in `FlowLightManager` constructor.
-3. Map `FlowLightState` fields to protocol channels/commands.
-
-## Run
-```bash
-cd frontend
-npm install
-npm run dev
-```
-
-(Backend unchanged for this phase.)
+## Integration path for real hardware
+Real integrations should implement `LightOutputAdapter` (`connect`, `disconnect`, `sendState`) and be injected into `FlowLightManager`.
