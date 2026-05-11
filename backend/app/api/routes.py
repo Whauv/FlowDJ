@@ -1,13 +1,20 @@
+import json
+from pathlib import Path
+
 from fastapi import APIRouter, HTTPException, Response
 
 from app.api.schemas import (
     KeyboardProfilesPayload,
+    RecommendationRequest,
+    RecommendationResponse,
+    RecommendationTrack,
     SessionAppendRequest,
     SessionAnalyticsPayload,
     SessionCreateRequest,
     SessionFinalizeRequest,
 )
 from app.core.keyboard_profiles import load_keyboard_profiles, save_keyboard_profiles
+from app.core.recommendation_engine import recommend_tracks
 from app.core.session_store import (
     append_session_data,
     create_session,
@@ -19,10 +26,8 @@ from app.core.session_store import (
 
 router = APIRouter()
 
-DEFAULT_KEYBOARD_PAYLOAD = KeyboardProfilesPayload(
-    selectedProfileId="default-laptop",
-    profiles=[]
-)
+DEFAULT_KEYBOARD_PAYLOAD = KeyboardProfilesPayload(selectedProfileId="default-laptop", profiles=[])
+FIXTURE_PATH = Path(__file__).resolve().parent.parent / "core" / "recommendation_fixtures.json"
 
 
 @router.get("/health")
@@ -32,7 +37,7 @@ def health() -> dict[str, str]:
 
 @router.get("/version")
 def version() -> dict[str, str]:
-    return {"version": "0.5.0", "stage": "post-mix-analytics"}
+    return {"version": "0.6.0", "stage": "smart-recommendations"}
 
 
 @router.get("/keyboard-profiles", response_model=KeyboardProfilesPayload)
@@ -93,8 +98,15 @@ def session_export_csv(session_id: str) -> Response:
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
     csv_text = export_session_csv(session)
-    return Response(
-        content=csv_text,
-        media_type="text/csv",
-        headers={"Content-Disposition": f"attachment; filename={session_id}.csv"},
-    )
+    return Response(content=csv_text, media_type="text/csv", headers={"Content-Disposition": f"attachment; filename={session_id}.csv"})
+
+
+@router.get("/recommendations/fixtures", response_model=list[RecommendationTrack])
+def recommendation_fixtures() -> list[RecommendationTrack]:
+    raw = json.loads(FIXTURE_PATH.read_text(encoding="utf-8"))
+    return [RecommendationTrack.model_validate(item) for item in raw]
+
+
+@router.post("/recommendations/next", response_model=RecommendationResponse)
+def recommendation_next(payload: RecommendationRequest) -> RecommendationResponse:
+    return recommend_tracks(payload)

@@ -1,0 +1,8 @@
+[
+  {"id":"lib-1","title":"Skyline Motion","bpm":124,"key":"8A","energy":6.2,"genres":["house","progressive"]},
+  {"id":"lib-2","title":"Nightline Surge","bpm":126,"key":"9A","energy":7.4,"genres":["tech-house","house"]},
+  {"id":"lib-3","title":"Velvet Basin","bpm":121,"key":"7A","energy":4.8,"genres":["deep-house","chill"]},
+  {"id":"lib-4","title":"Factory Ember","bpm":129,"key":"8B","energy":8.3,"genres":["techno","industrial"]},
+  {"id":"lib-5","title":"Solar Cruise","bpm":122,"key":"10A","energy":5.7,"genres":["nu-disco","funk"]},
+  {"id":"lib-6","title":"Afterglow Plains","bpm":118,"key":"6A","energy":3.9,"genres":["ambient","downtempo"]}
+]
