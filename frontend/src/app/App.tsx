@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { DeckPanel } from "../components/decks/DeckPanel";
 import { LibraryPanel } from "../components/library/LibraryPanel";
 import { TopBar } from "../components/layout/TopBar";
@@ -7,10 +7,12 @@ import { WaveformPanel } from "../components/waveform/WaveformPanel";
 import { KeyboardLegend } from "../components/keyboard/KeyboardLegend";
 import { MappingPanel } from "../components/keyboard/MappingPanel";
 import { OnboardingModal } from "../components/keyboard/OnboardingModal";
+import { SessionAnalyticsPanel } from "../components/analytics/SessionAnalyticsPanel";
 import { audioEngine } from "../services/audioEngine/engine";
 import { getLegendForMode, useKeyboardShortcuts } from "../services/keyboard/KeyboardManager";
 import type { FlowMode, KeyboardAction, KeyProfile } from "../services/keyboard/types";
 import { fetchKeyboardProfiles, saveKeyboardProfiles } from "../services/api/keyboardProfilesApi";
+import { appendSession, exportSessionCsv, exportSessionJson, finalizeSession, startSession } from "../services/api/sessionApi";
 import { useAppStore } from "../state/useAppStore";
 import type { DeckId } from "../state/types";
 import { clampNormalized, runAudioStateSanityChecks } from "../state/utils/audioStateTestUtils";
@@ -18,6 +20,8 @@ import { buildTransitionGuidance } from "../modules/transitions/engine";
 import { SAMPLE_TRACKS } from "../modules/transitions/sampleTracks";
 import { runTransitionTestCases } from "../modules/transitions/testCases";
 import type { TrackMeta } from "../modules/transitions/types";
+import type { SessionAnalyticsPayload, SessionTimelinePoint, SessionTransitionEvent } from "../modules/analytics/types";
+import { estimateCurrentEnergy, makeTimelinePoint } from "../modules/analytics/engine";
 
 function deckToTrackMeta(deckId: DeckId, deck: { trackName: string; bpm: number; musicalKey: string; energy: number; duration: number }): TrackMeta {
   return {
@@ -30,9 +34,23 @@ function deckToTrackMeta(deckId: DeckId, deck: { trackName: string; bpm: number;
   };
 }
 
+function keyClashRisk(a: string, b: string): number {
+  if (!a || !b) return 0.4;
+  if (a === b) return 0.1;
+  return a.slice(-1) === b.slice(-1) ? 0.35 : 0.7;
+}
+
 export function App() {
   const fileInputARef = useRef<HTMLInputElement>(null);
   const fileInputBRef = useRef<HTMLInputElement>(null);
+  const sessionIdRef = useRef<string | null>(null);
+  const startMsRef = useRef<number>(Date.now());
+  const lastCrossfaderRef = useRef<number>(0.5);
+  const timelineBufferRef = useRef<SessionTimelinePoint[]>([]);
+  const transitionBufferRef = useRef<SessionTransitionEvent[]>([]);
+
+  const [sessionAnalytics, setSessionAnalytics] = useState<SessionAnalyticsPayload | null>(null);
+
   const mode = useAppStore((s) => s.mode);
   const decks = useAppStore((s) => s.decks);
   const activeDeck = useAppStore((s) => s.activeDeck);
@@ -61,11 +79,7 @@ export function App() {
   const setShowMappingPanel = useAppStore((s) => s.setShowMappingPanel);
   const setLastAction = useAppStore((s) => s.setLastAction);
 
-  const activeProfile = useMemo(
-    () => profiles.find((profile) => profile.id === selectedProfileId) ?? profiles[0],
-    [profiles, selectedProfileId]
-  );
-
+  const activeProfile = useMemo(() => profiles.find((profile) => profile.id === selectedProfileId) ?? profiles[0], [profiles, selectedProfileId]);
   const legendItems = useMemo(() => getLegendForMode(activeProfile, mode as FlowMode), [activeProfile, mode]);
 
   const transitionGuidance = useMemo(() => {
@@ -73,42 +87,47 @@ export function App() {
     const incomingDeckId: DeckId = activeDeck;
     const outgoingDeck = decks[outgoingDeckId];
     const incomingDeck = decks[incomingDeckId];
-
     const source = deckToTrackMeta(outgoingDeckId, outgoingDeck.isLoaded ? outgoingDeck : incomingDeck);
-    const liveCandidate = incomingDeck.isLoaded
-      ? [deckToTrackMeta(incomingDeckId, incomingDeck)]
-      : [];
-
+    const liveCandidate = incomingDeck.isLoaded ? [deckToTrackMeta(incomingDeckId, incomingDeck)] : [];
     const candidates = [...liveCandidate, ...SAMPLE_TRACKS].filter((track) => track.title !== source.title);
-
-    return buildTransitionGuidance(
-      outgoingDeckId,
-      incomingDeckId,
-      source,
-      candidates,
-      outgoingDeck.currentTime,
-      safeMixMode
-    );
+    return buildTransitionGuidance(outgoingDeckId, incomingDeckId, source, candidates, outgoingDeck.currentTime, safeMixMode);
   }, [activeDeck, decks, safeMixMode]);
+
+  const recordTransitionEvent = useCallback((fromDeck: DeckId, toDeck: DeckId, note: string, usedLoop: boolean, usedRecovery: boolean) => {
+    const from = decks[fromDeck];
+    const to = decks[toDeck];
+    const event: SessionTransitionEvent = {
+      timestamp_ms: Date.now() - startMsRef.current,
+      from_deck: fromDeck,
+      to_deck: toDeck,
+      bpm_mismatch: Math.abs(from.bpm - to.bpm),
+      key_clash_risk: keyClashRisk(from.musicalKey, to.musicalKey),
+      overlap_seconds: Math.max(0, Math.min(from.currentTime, to.currentTime)),
+      abrupt_volume_delta: Math.abs(from.gain - to.gain),
+      used_loop: usedLoop,
+      used_recovery: usedRecovery,
+      notes: note
+    };
+    transitionBufferRef.current.push(event);
+  }, [decks]);
 
   useEffect(() => {
     audioEngine.init();
-    if (!runAudioStateSanityChecks()) {
-      setLastAction("Audio state utility checks failed");
-    }
+    if (!runAudioStateSanityChecks()) setLastAction("Audio state utility checks failed");
     const testResults = runTransitionTestCases();
-    if (testResults.length > 0) {
-      // Keep this visible for manual QA during MVP phases.
-      console.table(testResults);
-    }
+    if (testResults.length > 0) console.table(testResults);
+
+    void (async () => {
+      const sid = await startSession(new Date().toISOString());
+      sessionIdRef.current = sid;
+      startMsRef.current = Date.now();
+    })();
   }, [setLastAction]);
 
   useEffect(() => {
     void (async () => {
       const payload = await fetchKeyboardProfiles();
-      if (payload && payload.profiles.length > 0) {
-        setProfiles(payload.profiles, payload.selectedProfileId);
-      }
+      if (payload && payload.profiles.length > 0) setProfiles(payload.profiles, payload.selectedProfileId);
     })();
   }, [setProfiles]);
 
@@ -117,7 +136,7 @@ export function App() {
   }, [profiles, selectedProfileId]);
 
   useEffect(() => {
-    const interval = window.setInterval(() => {
+    const syncInterval = window.setInterval(() => {
       (Object.keys(decks) as DeckId[]).forEach((deckId) => {
         audioEngine.updateLoop(deckId);
         patchDeck(deckId, {
@@ -128,8 +147,41 @@ export function App() {
       });
     }, 80);
 
-    return () => window.clearInterval(interval);
-  }, [decks, patchDeck]);
+    const timelineInterval = window.setInterval(() => {
+      const point = makeTimelinePoint(
+        Date.now() - startMsRef.current,
+        masterGain,
+        crossfader,
+        estimateCurrentEnergy(decks.A.energy, decks.B.energy, crossfader)
+      );
+      timelineBufferRef.current.push(point);
+
+      const crossedCenter = (lastCrossfaderRef.current < 0.5 && crossfader >= 0.5) || (lastCrossfaderRef.current > 0.5 && crossfader <= 0.5);
+      if (crossedCenter && decks.A.isLoaded && decks.B.isLoaded) {
+        const fromDeck: DeckId = crossfader >= 0.5 ? "A" : "B";
+        const toDeck: DeckId = fromDeck === "A" ? "B" : "A";
+        recordTransitionEvent(fromDeck, toDeck, "Crossfader passed center", decks[fromDeck].loopEnabled || decks[toDeck].loopEnabled, false);
+      }
+      lastCrossfaderRef.current = crossfader;
+    }, 400);
+
+    const flushInterval = window.setInterval(() => {
+      const sid = sessionIdRef.current;
+      if (!sid) return;
+      if (!timelineBufferRef.current.length && !transitionBufferRef.current.length) return;
+      const timeline = [...timelineBufferRef.current];
+      const transitions = [...transitionBufferRef.current];
+      timelineBufferRef.current = [];
+      transitionBufferRef.current = [];
+      void appendSession(sid, timeline, transitions);
+    }, 5000);
+
+    return () => {
+      window.clearInterval(syncInterval);
+      window.clearInterval(timelineInterval);
+      window.clearInterval(flushInterval);
+    };
+  }, [crossfader, decks, masterGain, patchDeck, recordTransitionEvent]);
 
   useEffect(() => {
     audioEngine.setCrossfader(crossfader, { A: decks.A.gain, B: decks.B.gain });
@@ -180,10 +232,7 @@ export function App() {
 
   const onGainChange = useCallback((deckId: DeckId, gain: number) => {
     patchDeck(deckId, { gain });
-    audioEngine.setCrossfader(crossfader, {
-      A: deckId === "A" ? gain : decks.A.gain,
-      B: deckId === "B" ? gain : decks.B.gain
-    });
+    audioEngine.setCrossfader(crossfader, { A: deckId === "A" ? gain : decks.A.gain, B: deckId === "B" ? gain : decks.B.gain });
   }, [crossfader, decks.A.gain, decks.B.gain, patchDeck]);
 
   const onCue = useCallback((deckId: DeckId) => {
@@ -219,28 +268,44 @@ export function App() {
     onGainChange(target, 1);
     onGainChange(other, 0.1);
     setCrossfader(target === "A" ? 0.1 : 0.9);
+    recordTransitionEvent(other, target, "Recovery emergency fade", false, true);
     setLastAction("Recovery: emergency fade executed");
-  }, [activeDeck, onGainChange, setCrossfader, setLastAction]);
+  }, [activeDeck, onGainChange, recordTransitionEvent, setCrossfader, setLastAction]);
 
   const onRecoveryKillSwitch = useCallback(() => {
     setMasterGain(0);
     void onTogglePlay("A");
     void onTogglePlay("B");
+    recordTransitionEvent("A", "B", "Recovery kill switch", false, true);
     setLastAction("Recovery: kill switch triggered (held)");
-  }, [onTogglePlay, setLastAction, setMasterGain]);
+  }, [onTogglePlay, recordTransitionEvent, setLastAction, setMasterGain]);
 
   const onRecoverySafeTransition = useCallback(() => {
     const target = activeDeck;
     const other = target === "A" ? "B" : "A";
-    if (!decks[target].isPlaying) {
-      void onTogglePlay(target);
-    }
+    if (!decks[target].isPlaying) void onTogglePlay(target);
     onGainChange(target, 0.95);
     onGainChange(other, 0.25);
     setCrossfader(target === "A" ? 0.2 : 0.8);
     setMasterGain(0.85);
+    recordTransitionEvent(other, target, "Recovery safe transition", decks[target].loopEnabled || decks[other].loopEnabled, true);
     setLastAction("Recovery: safe transition applied");
-  }, [activeDeck, decks, onGainChange, onTogglePlay, setCrossfader, setLastAction, setMasterGain]);
+  }, [activeDeck, decks, onGainChange, onTogglePlay, recordTransitionEvent, setCrossfader, setLastAction, setMasterGain]);
+
+  const handleEndSession = useCallback(async () => {
+    const sid = sessionIdRef.current;
+    if (!sid) return;
+    if (timelineBufferRef.current.length || transitionBufferRef.current.length) {
+      await appendSession(sid, [...timelineBufferRef.current], [...transitionBufferRef.current]);
+      timelineBufferRef.current = [];
+      transitionBufferRef.current = [];
+    }
+    const payload = await finalizeSession(sid, new Date().toISOString());
+    if (payload) {
+      setSessionAnalytics(payload);
+      setLastAction(`Session ${payload.id} finalized`);
+    }
+  }, [setLastAction]);
 
   const handleKeyboardAction = useCallback((action: KeyboardAction, focusedDeck: DeckId) => {
     switch (action) {
@@ -285,9 +350,7 @@ export function App() {
   const onUpdateKey = useCallback((targetMode: FlowMode, action: KeyboardAction, nextCode: string, nextLabel: string) => {
     const updatedProfiles = profiles.map((profile) => {
       if (profile.id !== selectedProfileId) return profile;
-      const nextMappings = profile.mappings[targetMode].map((entry) =>
-        entry.action === action ? { ...entry, code: nextCode, label: nextLabel } : entry
-      );
+      const nextMappings = profile.mappings[targetMode].map((entry) => entry.action === action ? { ...entry, code: nextCode, label: nextLabel } : entry);
       return { ...profile, mappings: { ...profile.mappings, [targetMode]: nextMappings } } as KeyProfile;
     });
     setProfiles(updatedProfiles, selectedProfileId);
@@ -302,30 +365,19 @@ export function App() {
       <main className="main-layout">
         <DeckPanel deck={decks.A} isActive={activeDeck === "A"} fileInputRef={fileInputARef} onSelect={setActiveDeck} onLoadFile={onLoadFile} onTogglePlay={onTogglePlay} onSeekTo={onSeekTo} onGainChange={onGainChange} onCue={onCue} onLoop={onLoop} />
         <DeckPanel deck={decks.B} isActive={activeDeck === "B"} fileInputRef={fileInputBRef} onSelect={setActiveDeck} onLoadFile={onLoadFile} onTogglePlay={onTogglePlay} onSeekTo={onSeekTo} onGainChange={onGainChange} onCue={onCue} onLoop={onLoop} />
-        <MixerPanel
-          crossfader={crossfader}
-          masterGain={masterGain}
-          safeMixMode={safeMixMode}
-          guidance={transitionGuidance}
-          onCrossfaderChange={setCrossfader}
-          onMasterGainChange={setMasterGain}
-          onSafeMixToggle={setSafeMixMode}
-        />
+        <MixerPanel crossfader={crossfader} masterGain={masterGain} safeMixMode={safeMixMode} guidance={transitionGuidance} onCrossfaderChange={setCrossfader} onMasterGainChange={setMasterGain} onSafeMixToggle={setSafeMixMode} />
         <WaveformPanel deckA={decks.A} deckB={decks.B} />
         <KeyboardLegend modeLabel={mode.toUpperCase()} items={legendItems} />
         <LibraryPanel />
       </main>
+      <SessionAnalyticsPanel
+        analytics={sessionAnalytics}
+        onEndSession={() => void handleEndSession()}
+        onExportJson={() => sessionAnalytics && exportSessionJson(sessionAnalytics)}
+        onExportCsv={() => sessionAnalytics && void exportSessionCsv(sessionAnalytics.id)}
+      />
       {showOnboarding ? <OnboardingModal onClose={() => setShowOnboarding(false)} /> : null}
-      {showMappingPanel ? (
-        <MappingPanel
-          mode={mode as FlowMode}
-          profiles={profiles}
-          selectedProfileId={selectedProfileId}
-          onSelectProfile={selectProfile}
-          onUpdateKey={onUpdateKey}
-          onClose={() => setShowMappingPanel(false)}
-        />
-      ) : null}
+      {showMappingPanel ? <MappingPanel mode={mode as FlowMode} profiles={profiles} selectedProfileId={selectedProfileId} onSelectProfile={selectProfile} onUpdateKey={onUpdateKey} onClose={() => setShowMappingPanel(false)} /> : null}
     </div>
   );
 }
