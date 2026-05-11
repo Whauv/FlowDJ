@@ -1,5 +1,8 @@
 export type DeckId = "A" | "B";
 export type PhraseSection = "intro" | "buildup" | "drop" | "breakdown" | "outro" | "groove";
+export type HardwareMode = "simulation" | "live";
+export type AdapterKind = "dmx" | "hue" | "midi-clock";
+export type ConnectionState = "disconnected" | "discovering" | "connecting" | "connected" | "error";
 
 export interface FlowLightEvent {
   timestampMs: number;
@@ -61,6 +64,21 @@ export interface VirtualFixture {
   strobeHz: number;
 }
 
+export interface DeviceDescriptor {
+  id: string;
+  label: string;
+  transport: string;
+}
+
+export interface AdapterDiagnostics {
+  adapterId: string;
+  kind: AdapterKind;
+  state: ConnectionState;
+  message: string;
+  selectedDeviceId: string | null;
+  devices: DeviceDescriptor[];
+}
+
 export interface FlowLightState {
   sceneName: string;
   fixtures: VirtualFixture[];
@@ -72,7 +90,9 @@ export interface FlowLightState {
 
 export interface LightOutputAdapter {
   id: string;
-  connect: () => Promise<void>;
+  kind: AdapterKind;
+  discover: () => Promise<DeviceDescriptor[]>;
+  connect: (deviceId?: string) => Promise<void>;
   disconnect: () => Promise<void>;
   sendState: (state: FlowLightState) => Promise<void>;
 }

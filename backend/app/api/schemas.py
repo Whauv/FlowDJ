@@ -1,6 +1,6 @@
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, HttpUrl
 
 
 ModeName = Literal["browse", "mix", "fx", "recovery"]
@@ -117,3 +117,15 @@ class RecommendationResponse(BaseModel):
     bias: RecommendationBias
     target_mood: str
     recommendations: list[RecommendationItem]
+
+
+class TrackAsset(BaseModel):
+    id: str
+    title: str
+    source: Literal["local", "youtube"]
+    filename: str
+    url: str
+
+
+class YoutubeImportRequest(BaseModel):
+    url: HttpUrl

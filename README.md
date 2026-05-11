@@ -24,7 +24,8 @@ This repository now includes:
 ## Current Capabilities
 
 ### DJ Engine
-- Local audio import per deck
+- Local MP3 import (user-owned files) into shared library
+- YouTube URL import to backend-managed MP3 library files
 - Play/pause, seek, gain, crossfader, master output
 - BPM estimation, waveform preview, cue and loop controls
 - Mode placeholders: Browse / Mix / FX / Recovery
@@ -105,6 +106,10 @@ npm run dev
 Frontend defaults to `http://localhost:5173`
 Backend defaults to `http://localhost:8000`
 
+### Optional: YouTube MP3 import prerequisites
+YouTube import uses `yt-dlp` and requires `ffmpeg` available on your system path for mp3 extraction.
+If `ffmpeg` is missing, local MP3 upload still works and the app remains fully usable.
+
 ## Key Backend Endpoints
 
 - `GET /health`
@@ -123,6 +128,10 @@ Backend defaults to `http://localhost:8000`
 - Recommendations:
   - `GET /recommendations/fixtures`
   - `POST /recommendations/next`
+- Track sources:
+  - `GET /tracks`
+  - `POST /tracks/upload` (MP3 only)
+  - `POST /tracks/import-youtube` (converts to MP3)
 
 ## Hardware Integration Notes (FlowLight)
 

@@ -2,7 +2,17 @@ import { dmxPlaceholderAdapter, huePlaceholderAdapter, midiClockPlaceholderAdapt
 import { flowLightEventBus } from "./eventBus";
 import { DEFAULT_KEY_MAPPING, DEFAULT_PALETTES, getMoodMapping } from "./palettes";
 import { PHRASE_SCENE_MAP, chooseSceneName, renderVirtualScene } from "./sceneEngine";
-import type { FlowLightEvent, FlowLightSettings, FlowLightState, LightOutputAdapter, PaletteFamily } from "./types";
+import type {
+  AdapterDiagnostics,
+  AdapterKind,
+  ConnectionState,
+  FlowLightEvent,
+  FlowLightSettings,
+  FlowLightState,
+  HardwareMode,
+  LightOutputAdapter,
+  PaletteFamily
+} from "./types";
 
 const DEFAULT_SETTINGS: FlowLightSettings = {
   movementSensitivity: 1,
@@ -17,10 +27,23 @@ const DEFAULT_SETTINGS: FlowLightSettings = {
   paletteLibrary: DEFAULT_PALETTES
 };
 
+function makeDiag(adapter: LightOutputAdapter): AdapterDiagnostics {
+  return {
+    adapterId: adapter.id,
+    kind: adapter.kind,
+    state: "disconnected",
+    message: "Idle",
+    selectedDeviceId: null,
+    devices: []
+  };
+}
+
 export class FlowLightManager {
   private adapters: LightOutputAdapter[];
   private state: FlowLightState;
   private settings: FlowLightSettings;
+  private diagnostics: Record<AdapterKind, AdapterDiagnostics>;
+  private hardwareMode: HardwareMode = "simulation";
 
   constructor(adapters: LightOutputAdapter[] = [dmxPlaceholderAdapter, huePlaceholderAdapter, midiClockPlaceholderAdapter]) {
     this.adapters = adapters;
@@ -47,10 +70,33 @@ export class FlowLightManager {
       settings: this.settings,
       decision: seeded.decision
     };
+
+    this.diagnostics = {
+      dmx: makeDiag(dmxPlaceholderAdapter),
+      hue: makeDiag(huePlaceholderAdapter),
+      "midi-clock": makeDiag(midiClockPlaceholderAdapter)
+    };
   }
 
   getState(): FlowLightState {
     return this.state;
+  }
+
+  getDiagnostics(): AdapterDiagnostics[] {
+    return [this.diagnostics.dmx, this.diagnostics.hue, this.diagnostics["midi-clock"]];
+  }
+
+  getHardwareMode(): HardwareMode {
+    return this.hardwareMode;
+  }
+
+  setHardwareMode(mode: HardwareMode): void {
+    this.hardwareMode = mode;
+    if (mode === "simulation") {
+      this.getDiagnostics().forEach((diag) => {
+        this.diagnostics[diag.kind] = { ...diag, message: "Simulation mode active" };
+      });
+    }
   }
 
   updateSettings(next: Partial<FlowLightSettings>): void {
@@ -78,8 +124,52 @@ export class FlowLightManager {
     this.updateSettings({ keyToPalette: { ...this.settings.keyToPalette, [group]: paletteId } });
   }
 
+  async discover(kind: AdapterKind): Promise<void> {
+    const adapter = this.adapters.find((a) => a.kind === kind);
+    if (!adapter) return;
+    this.diagnostics[kind] = { ...this.diagnostics[kind], state: "discovering", message: "Discovering devices..." };
+    try {
+      const devices = await adapter.discover();
+      this.diagnostics[kind] = {
+        ...this.diagnostics[kind],
+        state: this.diagnostics[kind].state === "connected" ? "connected" : "disconnected",
+        devices,
+        message: devices.length ? `Found ${devices.length} device(s)` : "No devices found"
+      };
+    } catch {
+      this.diagnostics[kind] = { ...this.diagnostics[kind], state: "error", message: "Discovery failed" };
+    }
+  }
+
+  async connectAdapter(kind: AdapterKind, deviceId?: string): Promise<void> {
+    const adapter = this.adapters.find((a) => a.kind === kind);
+    if (!adapter) return;
+    this.diagnostics[kind] = { ...this.diagnostics[kind], state: "connecting", message: "Connecting..." };
+    try {
+      await adapter.connect(deviceId);
+      this.diagnostics[kind] = {
+        ...this.diagnostics[kind],
+        state: "connected",
+        selectedDeviceId: deviceId ?? this.diagnostics[kind].devices[0]?.id ?? null,
+        message: "Connected"
+      };
+    } catch {
+      this.diagnostics[kind] = { ...this.diagnostics[kind], state: "error", message: "Connection failed" };
+    }
+  }
+
+  async disconnectAdapter(kind: AdapterKind): Promise<void> {
+    const adapter = this.adapters.find((a) => a.kind === kind);
+    if (!adapter) return;
+    try {
+      await adapter.disconnect();
+      this.diagnostics[kind] = { ...this.diagnostics[kind], state: "disconnected", message: "Disconnected", selectedDeviceId: null };
+    } catch {
+      this.diagnostics[kind] = { ...this.diagnostics[kind], state: "error", message: "Disconnect failed" };
+    }
+  }
+
   async start(): Promise<() => void> {
-    await Promise.all(this.adapters.map((adapter) => adapter.connect()));
     const unsubscribe = flowLightEventBus.subscribe((event) => {
       void this.handleEvent(event);
     });
@@ -100,7 +190,15 @@ export class FlowLightManager {
       decision: next.decision
     };
     this.state = nextState;
-    await Promise.all(this.adapters.map((adapter) => adapter.sendState(nextState)));
+
+    if (this.hardwareMode === "live") {
+      await Promise.all(this.adapters.map(async (adapter) => {
+        const diag = this.diagnostics[adapter.kind];
+        if (diag.state === "connected") {
+          await adapter.sendState(nextState);
+        }
+      }));
+    }
   }
 }
 

@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 
-from fastapi import APIRouter, HTTPException, Response
+from fastapi import APIRouter, File, HTTPException, Response, UploadFile
 
 from app.api.schemas import (
     KeyboardProfilesPayload,
@@ -12,6 +12,8 @@ from app.api.schemas import (
     SessionAnalyticsPayload,
     SessionCreateRequest,
     SessionFinalizeRequest,
+    TrackAsset,
+    YoutubeImportRequest,
 )
 from app.core.keyboard_profiles import load_keyboard_profiles, save_keyboard_profiles
 from app.core.recommendation_engine import recommend_tracks
@@ -23,6 +25,7 @@ from app.core.session_store import (
     get_session_analytics,
     list_session_analytics,
 )
+from app.core.track_sources import import_youtube_as_mp3, list_tracks, save_uploaded_mp3
 
 router = APIRouter()
 
@@ -110,3 +113,20 @@ def recommendation_fixtures() -> list[RecommendationTrack]:
 @router.post("/recommendations/next", response_model=RecommendationResponse)
 def recommendation_next(payload: RecommendationRequest) -> RecommendationResponse:
     return recommend_tracks(payload)
+
+
+@router.get("/tracks", response_model=list[TrackAsset])
+def get_tracks() -> list[TrackAsset]:
+    return [TrackAsset.model_validate(item) for item in list_tracks()]
+
+
+@router.post("/tracks/upload", response_model=TrackAsset)
+async def upload_track(file: UploadFile = File(...)) -> TrackAsset:
+    track = await save_uploaded_mp3(file)
+    return TrackAsset.model_validate(track)
+
+
+@router.post("/tracks/import-youtube", response_model=TrackAsset)
+def import_youtube_track(payload: YoutubeImportRequest) -> TrackAsset:
+    track = import_youtube_as_mp3(str(payload.url))
+    return TrackAsset.model_validate(track)
