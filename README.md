@@ -1,59 +1,66 @@
-# FlowDJ (Phase 4 Guided Transitions + Beginner Assist)
+# FlowDJ (Phase 5 Post-Mix Analytics)
 
-FlowDJ is a laptop-native DJ MVP built around keyboard-primary mixing, now extended with interpretable transition guidance.
+FlowDJ is a laptop-native DJ system with keyboard-first mixing and now a complete session analytics layer to help users improve over time.
 
-## New in Phase 4
-- Rule-based compatibility scoring for next-track suggestions using:
-  - BPM difference
-  - harmonic key compatibility (Camelot adjacency)
-  - energy mismatch
-- Suggested Next Track panel in mixer
-- Suggested transition actions in mixer area:
-  - start blend now
-  - enable 8-bar loop
-  - lower bass on outgoing deck
-  - swap decks at drop
-  - use echo out
-- Phrase-aware timing hint based on 8-bar boundary estimation
-- Safe Mix mode toggle to reduce risky transitions
-- Visual warnings for BPM/key/energy clashes
-- Explanation text for every recommendation
-- Example transition test cases for sample tracks
+## Phase 5 Features
+- Session timeline recorder (master gain, crossfader, energy over time)
+- Transition event log (per transition metrics)
+- Backend session persistence APIs
+- Post-session scorecard and transition-by-transition report
+- Replay panel (transition markers)
+- Improvement suggestion panel
+- Export session as JSON and CSV
 
-## Architecture (Phase 4 additions)
-- `frontend/src/modules/transitions/engine.ts`
-  - rule-based compatibility and transition hint engine
-- `frontend/src/modules/transitions/sampleTracks.ts`
-  - candidate track metadata set
-- `frontend/src/modules/transitions/testCases.ts`
-  - example test cases for recommendation behavior
+## Metrics Tracked and Scored
+- Transition timing
+- Dead air duration
+- Overlap quality
+- Abrupt volume changes
+- BPM mismatch severity
+- Key clash risk
+- Loop usage quality
+- Recovery actions used
+- Average energy flow across the set
 
-## How compatibility score works
-Compatibility score is weighted and interpretable:
-- BPM score: tempo gap penalty
-- Key score: exact/adjacent/non-harmonic mapping
-- Energy score: large energy jump penalty
-- Safe Mix mode applies extra penalties to risky candidates
+## Scoring Logic
+Scoring is rule-based and transparent in backend analytics pipeline (`backend/app/core/session_store.py`).
 
-Each recommendation includes explanation text and warnings.
+Examples:
+- Dead air is estimated from low master-gain timeline windows.
+- BPM mismatch severity is average mismatch across logged transitions.
+- Key clash risk is averaged from transition harmonic risk estimates.
+- Total score is a weighted aggregate of timing/overlap/abruptness/mismatch/risk/loop/dead-air factors.
 
-## UI behavior
-- Suggestions update live as deck position changes.
-- Mixer shows:
-  - top candidate track + compatibility score
-  - explanation line
-  - warning chips/messages
-  - action guidance card with phrase hint
-- Safe Mix toggle changes recommendation ranking in real time.
+## Backend Session Model + APIs
+Defined in:
+- `backend/app/api/schemas.py`
+- `backend/app/core/session_store.py`
+- `backend/app/api/routes.py`
 
-## Run Frontend
+Endpoints:
+- `POST /sessions/start`
+- `POST /sessions/append`
+- `POST /sessions/finalize`
+- `GET /sessions`
+- `GET /sessions/{session_id}`
+- `GET /sessions/{session_id}/export/json`
+- `GET /sessions/{session_id}/export/csv`
+
+## Frontend Analytics Pipeline
+- Timeline sampling and transition logging integrated in `frontend/src/app/App.tsx`
+- Analytics panel in `frontend/src/components/analytics/SessionAnalyticsPanel.tsx`
+- Session API client in `frontend/src/services/api/sessionApi.ts`
+- Helpers in `frontend/src/modules/analytics/`
+
+## Run
+### Frontend
 ```bash
 cd frontend
 npm install
 npm run dev
 ```
 
-## Run Backend
+### Backend
 ```bash
 cd backend
 python -m venv .venv
@@ -62,17 +69,7 @@ pip install -e .
 uvicorn app.main:app --reload --port 8000
 ```
 
-## Existing API
-- `GET /health`
-- `GET /version`
-- `GET /keyboard-profiles`
-- `PUT /keyboard-profiles`
-
-## Example Test Cases
-Implemented in:
-- `frontend/src/modules/transitions/testCases.ts`
-
-Scenarios include:
-- Balanced house blend
-- Safe-mix conservative ranking
-- Energy-clash warning detection
+## Notes
+- Keep backend running to persist and finalize analytics sessions.
+- Use the Session Analytics panel to end a session and generate scorecard/report.
+- Export buttons provide JSON/CSV session artifacts for review.
