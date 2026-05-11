@@ -1,21 +1,27 @@
-﻿# FlowDJ (Phase 1 Scaffold)
+# FlowDJ (Phase 2 Core Deck Engine)
 
 FlowDJ is a laptop-first DJ web app MVP designed for keyboard-primary mixing.
 
 ## Stack
 - Frontend: React + TypeScript + Vite + Zustand
 - Backend: Python + FastAPI
-- Audio foundation: Web Audio API placeholder engine
+- Audio engine: Browser Web Audio API + media elements (low-latency interactive routing)
 
-## Phase 1 Scope
-- Two decks
-- Center mixer panel
-- Waveform view placeholder
-- Library panel
-- Top transport/status bar
-- Keyboard shortcut system service with configurable mappings
-- Mode system placeholder: Browse, Mix, FX, Recovery
-- Dark theme by default
+## Phase 2 Scope Implemented
+- Two-deck playback engine
+- Local audio file import (per deck)
+- Load track to left/right deck
+- Play/pause per deck
+- Seek scrub and seek-step controls
+- Deck gain controls
+- Crossfader + master output controls
+- Waveform rendering (per deck + combined view)
+- BPM estimation and display
+- Cue point set/jump
+- Loop in/out and autoloop
+- Active-deck visual feedback
+- Keyboard-first path for all critical live actions
+- Basic unsupported-file error handling
 
 ## Project Structure
 ```text
@@ -33,6 +39,7 @@ FlowDJ/
         audioEngine/
         keyboard/
       state/
+        utils/
       hooks/
       modules/
         waveform/
@@ -71,16 +78,22 @@ Backend runs at `http://localhost:8000`.
 - `GET /health`
 - `GET /version`
 
-## Keyboard Defaults
-- `Space`: Play/Pause Deck A
-- `Enter`: Play/Pause Deck B
-- `1`: Browse Mode
-- `2`: Mix Mode
-- `3`: FX Mode
-- `4`: Recovery Mode
-
-Mappings are managed in:
-- `frontend/src/services/keyboard/KeyboardManager.ts`
+## Keyboard Controls (Core Live Actions)
+- `Q`: Import file to Deck A
+- `P`: Import file to Deck B
+- `Z`: Play/Pause Deck A
+- `X`: Play/Pause Deck B
+- `Tab`: Switch active deck
+- `Left/Right Arrow`: Seek active deck -5s/+5s
+- `A/S`: Decrease/Increase active deck volume
+- `,` / `.`: Crossfader left/right
+- `N/M`: Master output down/up
+- `C`: Cue set (first press) / Cue jump (next presses)
+- `L`: Loop In/Out/Clear on active deck
+- `K`: Enable active-deck autoloop
+- `1/2/3/4`: Browse/Mix/FX/Recovery modes
 
 ## Notes
-This is a clean scaffold only. Advanced DJ logic (beat sync, cue system, loops, FX routing, full waveform analysis, hardware integration) is intentionally deferred.
+- Mouse controls are available, but all critical deck/mixer actions have keyboard paths.
+- BPM estimation is lightweight and intended for MVP guidance.
+- Advanced features (beat sync quality tuning, stems, advanced FX chains, controller HID/MIDI integration) are intentionally deferred.

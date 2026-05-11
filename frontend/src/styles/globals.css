@@ -1,4 +1,4 @@
-﻿:root {
+:root {
   color-scheme: dark;
   --bg: #101216;
   --bg-elev: #171a21;
@@ -9,6 +9,7 @@
   --accent: #52d0ff;
   --good: #64d98b;
   --warn: #ffbb54;
+  --error: #ff6b6b;
 }
 
 * {
@@ -22,7 +23,8 @@ body {
   font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
 }
 
-button {
+button,
+input {
   font: inherit;
 }
 
@@ -50,7 +52,7 @@ button {
 .main-layout {
   display: grid;
   grid-template-columns: 1fr minmax(240px, 300px) 1fr;
-  grid-template-rows: minmax(170px, 220px) minmax(140px, 1fr) minmax(180px, 230px);
+  grid-template-rows: minmax(230px, auto) minmax(240px, 1fr) minmax(180px, 230px);
   grid-template-areas:
     "deck-a mixer deck-b"
     "waveform mixer waveform"
@@ -64,6 +66,10 @@ button {
   background: linear-gradient(180deg, var(--bg-elev), #12161d);
   border-radius: 10px;
   padding: 0.75rem;
+}
+
+.deck-active {
+  box-shadow: 0 0 0 1px var(--accent), 0 0 18px rgba(82, 208, 255, 0.2);
 }
 
 .deck-a {
@@ -93,6 +99,14 @@ button {
   flex-wrap: wrap;
 }
 
+.row.between {
+  justify-content: space-between;
+}
+
+.controls {
+  margin: 0.5rem 0;
+}
+
 .pill {
   border: 1px solid var(--border);
   border-radius: 999px;
@@ -113,6 +127,27 @@ button {
   color: var(--accent);
 }
 
+.action-btn {
+  border: 1px solid var(--border);
+  background: #172131;
+  color: var(--text);
+  border-radius: 6px;
+  padding: 0.32rem 0.55rem;
+  cursor: pointer;
+}
+
+.action-btn:hover {
+  border-color: var(--accent);
+}
+
+.file-btn input {
+  display: none;
+}
+
+input[type="range"] {
+  width: 100%;
+}
+
 .level {
   height: 8px;
   border-radius: 999px;
@@ -126,6 +161,22 @@ button {
   background: linear-gradient(90deg, var(--good), var(--accent));
 }
 
+.wave-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.65rem;
+}
+
+.error-text {
+  color: var(--error);
+  margin: 0.25rem 0;
+}
+
+.tiny-text {
+  color: var(--muted);
+  font-size: 0.86rem;
+}
+
 @media (max-width: 1080px) {
   .main-layout {
     grid-template-columns: 1fr;
@@ -136,5 +187,11 @@ button {
       "waveform"
       "library";
     grid-template-rows: auto;
+  }
+
+  .top-bar {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 0.5rem;
   }
 }

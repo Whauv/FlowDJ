@@ -1,9 +1,24 @@
-﻿import { useEffect } from "react";
+import { useEffect } from "react";
 import { useAppStore } from "../../state/useAppStore";
+import type { DeckId } from "../../state/types";
 
 export type ShortcutAction =
-  | "playPauseA"
-  | "playPauseB"
+  | "loadDeckA"
+  | "loadDeckB"
+  | "togglePlayA"
+  | "togglePlayB"
+  | "seekBack"
+  | "seekForward"
+  | "volumeUp"
+  | "volumeDown"
+  | "crossfaderLeft"
+  | "crossfaderRight"
+  | "masterUp"
+  | "masterDown"
+  | "cue"
+  | "loop"
+  | "autoloop"
+  | "activeDeck"
   | "modeBrowse"
   | "modeMix"
   | "modeFx"
@@ -13,9 +28,27 @@ export interface ShortcutMapping {
   [key: string]: ShortcutAction;
 }
 
+interface KeyboardHandlers {
+  onAction: (action: ShortcutAction, activeDeck: DeckId) => void;
+}
+
 const defaultMapping: ShortcutMapping = {
-  Space: "playPauseA",
-  Enter: "playPauseB",
+  KeyQ: "loadDeckA",
+  KeyP: "loadDeckB",
+  KeyZ: "togglePlayA",
+  KeyX: "togglePlayB",
+  ArrowLeft: "seekBack",
+  ArrowRight: "seekForward",
+  KeyA: "volumeDown",
+  KeyS: "volumeUp",
+  Comma: "crossfaderLeft",
+  Period: "crossfaderRight",
+  KeyN: "masterDown",
+  KeyM: "masterUp",
+  KeyC: "cue",
+  KeyL: "loop",
+  KeyK: "autoloop",
+  Tab: "activeDeck",
   Digit1: "modeBrowse",
   Digit2: "modeMix",
   Digit3: "modeFx",
@@ -29,10 +62,6 @@ export class KeyboardManager {
     this.mapping = mapping;
   }
 
-  updateMapping(next: ShortcutMapping): void {
-    this.mapping = next;
-  }
-
   resolveAction(event: KeyboardEvent): ShortcutAction | null {
     return this.mapping[event.code] ?? null;
   }
@@ -40,10 +69,10 @@ export class KeyboardManager {
 
 export const keyboardManager = new KeyboardManager();
 
-export function useKeyboardShortcuts(): void {
+export function useKeyboardShortcuts({ onAction }: KeyboardHandlers): void {
+  const activeDeck = useAppStore((s) => s.activeDeck);
   const setMode = useAppStore((s) => s.setMode);
-  const togglePlay = useAppStore((s) => s.togglePlay);
-  const setLastAction = useAppStore((s) => s.setLastAction);
+  const setActiveDeck = useAppStore((s) => s.setActiveDeck);
 
   useEffect(() => {
     const handler = (event: KeyboardEvent) => {
@@ -52,33 +81,22 @@ export function useKeyboardShortcuts(): void {
         return;
       }
 
+      if (event.target instanceof HTMLInputElement) {
+        return;
+      }
+
       event.preventDefault();
 
-      switch (action) {
-        case "playPauseA":
-          togglePlay("A");
-          break;
-        case "playPauseB":
-          togglePlay("B");
-          break;
-        case "modeBrowse":
-          setMode("browse");
-          break;
-        case "modeMix":
-          setMode("mix");
-          break;
-        case "modeFx":
-          setMode("fx");
-          break;
-        case "modeRecovery":
-          setMode("recovery");
-          break;
-        default:
-          setLastAction("Unhandled keyboard action");
-      }
+      if (action === "modeBrowse") return setMode("browse");
+      if (action === "modeMix") return setMode("mix");
+      if (action === "modeFx") return setMode("fx");
+      if (action === "modeRecovery") return setMode("recovery");
+      if (action === "activeDeck") return setActiveDeck(activeDeck === "A" ? "B" : "A");
+
+      onAction(action, activeDeck);
     };
 
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [setMode, togglePlay, setLastAction]);
+  }, [activeDeck, onAction, setActiveDeck, setMode]);
 }
