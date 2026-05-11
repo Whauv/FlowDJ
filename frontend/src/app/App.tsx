@@ -10,6 +10,7 @@ import { OnboardingModal } from "../components/keyboard/OnboardingModal";
 import { SessionAnalyticsPanel } from "../components/analytics/SessionAnalyticsPanel";
 import { NextTrackPanel } from "../components/recommendations/NextTrackPanel";
 import { StrategySelector } from "../components/recommendations/StrategySelector";
+import { FlowLightPreviewPanel } from "../components/lighting/FlowLightPreviewPanel";
 import { audioEngine } from "../services/audioEngine/engine";
 import { getLegendForMode, useKeyboardShortcuts } from "../services/keyboard/KeyboardManager";
 import type { FlowMode, KeyboardAction, KeyProfile } from "../services/keyboard/types";
@@ -26,6 +27,9 @@ import type { TrackMeta } from "../modules/transitions/types";
 import type { SessionAnalyticsPayload, SessionTimelinePoint, SessionTransitionEvent } from "../modules/analytics/types";
 import { estimateCurrentEnergy, makeTimelinePoint } from "../modules/analytics/engine";
 import type { RecommendationResponse, RecommendationTrack } from "../modules/recommendations/types";
+import { flowLightEventBus } from "../modules/flowlight/eventBus";
+import { flowLightManager } from "../modules/flowlight/manager";
+import type { FlowLightState } from "../modules/flowlight/types";
 
 function deckToTrackMeta(deckId: DeckId, deck: { trackName: string; bpm: number; musicalKey: string; energy: number; duration: number }): TrackMeta {
   return { id: `deck-${deckId}`, title: deck.trackName, bpm: deck.bpm || 124, key: deck.musicalKey || "8A", energy: deck.energy || 5, duration: deck.duration || 300 };
@@ -54,6 +58,7 @@ export function App() {
   const [sessionAnalytics, setSessionAnalytics] = useState<SessionAnalyticsPayload | null>(null);
   const [recommendationLibrary, setRecommendationLibrary] = useState<RecommendationTrack[]>([]);
   const [recommendationResult, setRecommendationResult] = useState<RecommendationResponse | null>(null);
+  const [flowLightState, setFlowLightState] = useState<FlowLightState>(flowLightManager.getState());
 
   const mode = useAppStore((s) => s.mode);
   const decks = useAppStore((s) => s.decks);
@@ -139,6 +144,16 @@ export function App() {
   }, [setLastAction]);
 
   useEffect(() => {
+    let dispose: (() => void) | null = null;
+    void (async () => {
+      dispose = await flowLightManager.start();
+    })();
+    return () => {
+      if (dispose) dispose();
+    };
+  }, []);
+
+  useEffect(() => {
     void (async () => {
       const payload = await fetchKeyboardProfiles();
       if (payload && payload.profiles.length > 0) setProfiles(payload.profiles, payload.selectedProfileId);
@@ -203,6 +218,32 @@ export function App() {
     audioEngine.setCrossfader(crossfader, { A: decks.A.gain, B: decks.B.gain });
     audioEngine.setMasterGain(masterGain);
   }, [crossfader, decks.A.gain, decks.B.gain, masterGain]);
+
+  useEffect(() => {
+    const bpm = activeDeck === "A" ? decks.A.bpm || decks.B.bpm || 120 : decks.B.bpm || decks.A.bpm || 120;
+    const currentTime = activeDeck === "A" ? decks.A.currentTime : decks.B.currentTime;
+    const beatLength = bpm > 0 ? 60 / bpm : 0.5;
+    const beatPhase = ((currentTime % beatLength) / beatLength) % 1;
+    const phraseLength = beatLength * 32;
+    const phraseProgress = (currentTime % phraseLength) / phraseLength;
+    const phraseSection = phraseProgress < 0.25 ? "build" : phraseProgress < 0.5 ? "drop" : phraseProgress < 0.75 ? "groove" : "breakdown";
+    const marker = phraseSection === "drop" ? "drop" : phraseSection === "build" ? "build" : phraseSection === "breakdown" ? "breakdown" : "none";
+    const key = activeDeck === "A" ? decks.A.musicalKey : decks.B.musicalKey;
+    const energy = activeDeck === "A" ? decks.A.energy : decks.B.energy;
+
+    flowLightEventBus.publish({
+      timestampMs: Date.now(),
+      bpm,
+      beatPhase,
+      phraseSection,
+      activeDeck,
+      crossfader,
+      energy,
+      marker,
+      key
+    });
+    setFlowLightState(flowLightManager.getState());
+  }, [activeDeck, crossfader, decks.A.bpm, decks.A.currentTime, decks.A.energy, decks.A.musicalKey, decks.B.bpm, decks.B.currentTime, decks.B.energy, decks.B.musicalKey]);
 
   const onLoadFile = useCallback(async (deckId: DeckId, file: File | null) => {
     if (!file) return;
@@ -335,6 +376,7 @@ export function App() {
           onMoodChange={setRecommendationMood}
         />
         <NextTrackPanel recommendations={recommendationResult} />
+        <FlowLightPreviewPanel state={flowLightState} />
       </main>
       <SessionAnalyticsPanel
         analytics={sessionAnalytics}

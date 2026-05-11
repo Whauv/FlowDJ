@@ -26,7 +26,8 @@ button,input,select { font: inherit; }
     "waveform mixer waveform"
     "keyboard-legend mixer library"
     "keyboard-legend strategy library"
-    "recommend recommendation recommendation";
+    "recommend recommendation recommendation"
+    "flowlight flowlight flowlight";
   gap: 0.75rem;
   padding: 0.75rem;
 }
@@ -40,6 +41,7 @@ button,input,select { font: inherit; }
 .keyboard-legend { grid-area: keyboard-legend; }
 .strategy-panel { grid-area: strategy; }
 .recommendation-panel { grid-area: recommend; }
+.flowlight-panel { grid-area: flowlight; }
 .row { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; }
 .row.between { justify-content: space-between; }
 .controls { margin: 0.5rem 0; }
@@ -64,11 +66,14 @@ input[type="range"] { width: 100%; }
 .metric { border: 1px solid var(--border); border-radius: 6px; padding: 0.4rem; background: #141a24; }
 .timeline-strip { display: flex; gap: 0.2rem; flex-wrap: wrap; margin-top: 0.4rem; }
 .timeline-marker { width: 9px; height: 18px; border-radius: 3px; background: linear-gradient(180deg, var(--accent), var(--good)); }
+.fixture-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 0.5rem; }
+.fixture-card { border: 1px solid var(--border); border-radius: 8px; padding: 0.45rem; background: #141a24; }
+.fixture-lamp { width: 100%; height: 52px; border-radius: 6px; border: 1px solid var(--border); }
 .modal-panel { position: fixed; inset: auto 1rem 1rem auto; width: min(640px, calc(100vw - 2rem)); max-height: 78vh; overflow: auto; z-index: 30; box-shadow: 0 16px 60px rgba(0,0,0,0.45); }
 .error-text { color: var(--error); margin: 0.25rem 0; }
 .tiny-text { color: var(--muted); font-size: 0.86rem; }
 @media (max-width: 1080px) {
-  .main-layout { grid-template-columns: 1fr; grid-template-areas: "deck-a" "deck-b" "mixer" "waveform" "keyboard-legend" "library" "strategy" "recommend"; grid-template-rows: auto; }
+  .main-layout { grid-template-columns: 1fr; grid-template-areas: "deck-a" "deck-b" "mixer" "waveform" "keyboard-legend" "library" "strategy" "recommend" "flowlight"; grid-template-rows: auto; }
   .top-bar { align-items: flex-start; flex-direction: column; gap: 0.5rem; }
   .legend-grid { grid-template-columns: 1fr; }
   .mapping-row { grid-template-columns: 1fr; }

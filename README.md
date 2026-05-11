@@ -1,55 +1,69 @@
-# FlowDJ (Phase 6 Smart Track Recommendation Layer)
+# FlowDJ (Phase 7 FlowLight Lighting Sync Architecture)
 
-FlowDJ now includes a lightweight AI-assisted next-track recommender built as a hybrid metadata + rule engine (ML-replaceable service boundary).
+FlowDJ now includes FlowLight, a music-to-light architecture synchronized to DJ deck state.
 
-## Phase 6 Features
-- Recommended next tracks in live panel
-- Human-readable reason strings per recommendation
-- Strategy selector:
-  - Build Energy
-  - Maintain Groove
-  - Cool Down
-  - Surprise Switch
-- Mood filter input (for tag bias)
-- Bias control:
-  - Safe
-  - Balanced
-  - Adventurous
-- Session-history-aware filtering (avoid repeating already-used tracks)
+## Goal Achieved
+Lighting sync is driven by real DJ engine state (BPM/deck/crossfader/phrase/energy), not only raw volume.
 
-## Hybrid Engine Inputs
+## FlowLight Architecture
+### Core modules
+- `frontend/src/modules/flowlight/eventBus.ts`
+  - DJ-to-light event bus
+- `frontend/src/modules/flowlight/sceneEngine.ts`
+  - Scene selection + fixture rendering logic
+- `frontend/src/modules/flowlight/manager.ts`
+  - Lighting state manager + adapter fanout
+- `frontend/src/modules/flowlight/types.ts`
+  - Shared lighting contracts
+- `frontend/src/modules/flowlight/adapters.ts`
+  - Output adapter interfaces + placeholders
+
+### Output adapters (placeholders)
+- DMX placeholder adapter
+- Philips Hue placeholder adapter
+- Generic MIDI/clock placeholder adapter
+
+No hardware is required for this phase.
+
+## DJ Event Bus Inputs Used
 - BPM
-- Musical key (Camelot relation)
-- Energy estimate
-- Genre tags (when available)
-- Session history IDs
-- Desired direction and bias
+- beat phase
+- phrase section (build/drop/groove/breakdown)
+- active deck
+- crossfader position
+- energy level
+- markers (build/drop/breakdown)
+- optional key-to-color mapping
 
-## Backend Service/API
-- Service module: `backend/app/core/recommendation_engine.py`
-- Fixtures: `backend/app/core/recommendation_fixtures.json`
-- API routes:
-  - `GET /recommendations/fixtures`
-  - `POST /recommendations/next`
+## Virtual Lighting Preview
+- UI panel: `frontend/src/components/lighting/FlowLightPreviewPanel.tsx`
+- Shows virtual fixtures with:
+  - intensity
+  - color
+  - pan/tilt
+  - active scene name
 
-## Frontend Integration
-- API client: `frontend/src/services/api/recommendationApi.ts`
-- Strategy UI: `frontend/src/components/recommendations/StrategySelector.tsx`
-- Suggestions UI: `frontend/src/components/recommendations/NextTrackPanel.tsx`
-- Recommendation types: `frontend/src/modules/recommendations/types.ts`
-- App wiring: `frontend/src/app/App.tsx`
+## Integration Hookup
+- App publishes DJ state events into FlowLight event bus from `frontend/src/app/App.tsx`
+- FlowLight manager consumes events, updates scene state, and fans out to adapters
+- Preview panel renders current virtual fixture state
+
+## Extensibility for Real Integrations
+Adapters follow a shared interface:
+- `connect()`
+- `disconnect()`
+- `sendState(state)`
+
+To add real hardware:
+1. Implement `LightOutputAdapter` for target system.
+2. Register adapter in `FlowLightManager` constructor.
+3. Map `FlowLightState` fields to protocol channels/commands.
 
 ## Run
-```bash
-cd backend
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-pip install -e .
-uvicorn app.main:app --reload --port 8000
-```
-
 ```bash
 cd frontend
 npm install
 npm run dev
 ```
+
+(Backend unchanged for this phase.)
