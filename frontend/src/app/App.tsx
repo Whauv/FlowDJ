@@ -384,10 +384,25 @@ export function App() {
           onMoodChange={setRecommendationMood}
         />
         <NextTrackPanel recommendations={recommendationResult} />
-        <FlowLightPreviewPanel state={flowLightState} onSettingsChange={(next) => {
-          flowLightManager.updateSettings(next);
-          setFlowLightState(flowLightManager.getState());
-        }} />
+        <FlowLightPreviewPanel
+          state={flowLightState}
+          onSettingsChange={(next) => {
+            flowLightManager.updateSettings(next);
+            setFlowLightState(flowLightManager.getState());
+          }}
+          onApplyMoodPreset={(presetId) => {
+            flowLightManager.applyMoodPreset(presetId);
+            setFlowLightState(flowLightManager.getState());
+          }}
+          onUpdatePaletteColor={(paletteId, index, color) => {
+            flowLightManager.updatePaletteColor(paletteId, index, color);
+            setFlowLightState(flowLightManager.getState());
+          }}
+          onUpdateKeyMapping={(group, paletteId) => {
+            flowLightManager.updateKeyMapping(group, paletteId);
+            setFlowLightState(flowLightManager.getState());
+          }}
+        />
       </main>
       <SessionAnalyticsPanel
         analytics={sessionAnalytics}

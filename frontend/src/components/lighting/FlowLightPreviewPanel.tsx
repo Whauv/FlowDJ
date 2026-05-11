@@ -1,11 +1,23 @@
+import { MOOD_PRESETS } from "../../modules/flowlight/palettes";
 import type { FlowLightSettings, FlowLightState } from "../../modules/flowlight/types";
 
 interface FlowLightPreviewPanelProps {
   state: FlowLightState;
   onSettingsChange: (next: Partial<FlowLightSettings>) => void;
+  onApplyMoodPreset: (presetId: string) => void;
+  onUpdatePaletteColor: (paletteId: string, index: number, color: string) => void;
+  onUpdateKeyMapping: (group: string, paletteId: string) => void;
 }
 
-export function FlowLightPreviewPanel({ state, onSettingsChange }: FlowLightPreviewPanelProps) {
+export function FlowLightPreviewPanel({
+  state,
+  onSettingsChange,
+  onApplyMoodPreset,
+  onUpdatePaletteColor,
+  onUpdateKeyMapping
+}: FlowLightPreviewPanelProps) {
+  const groups = ["1","2","3","4","5","6","7","8","9","10","11","12"];
+
   return (
     <section className="panel flowlight-panel">
       <div className="row between">
@@ -14,6 +26,14 @@ export function FlowLightPreviewPanel({ state, onSettingsChange }: FlowLightPrev
       </div>
 
       <div className="flowlight-controls">
+        <label className="tiny-text">Mood Preset
+          <select value={state.settings.selectedMoodPreset} onChange={(e) => onApplyMoodPreset(e.target.value)}>
+            {MOOD_PRESETS.map((preset) => <option key={preset.id} value={preset.id}>{preset.label}</option>)}
+          </select>
+        </label>
+        <label className="tiny-text row">Key-Aware Coloring
+          <input type="checkbox" checked={state.settings.keyAwareColoring} onChange={(e) => onSettingsChange({ keyAwareColoring: e.target.checked })} />
+        </label>
         <label className="tiny-text">Movement Sensitivity
           <input type="range" min={0.4} max={2} step={0.05} value={state.settings.movementSensitivity} onChange={(e) => onSettingsChange({ movementSensitivity: Number(e.target.value) })} />
         </label>
@@ -32,6 +52,46 @@ export function FlowLightPreviewPanel({ state, onSettingsChange }: FlowLightPrev
         <label className="tiny-text row">Drops/Build Only Strobe
           <input type="checkbox" checked={state.settings.strobeOnDropsOnly} onChange={(e) => onSettingsChange({ strobeOnDropsOnly: e.target.checked })} />
         </label>
+      </div>
+
+      <div className="suggestion-card">
+        <h4>Lighting Decision</h4>
+        <p className="tiny-text">Palette: {state.decision.paletteName}</p>
+        <p className="tiny-text">Reason: {state.decision.explanation}</p>
+        <div className="row">
+          <span className="chip" style={{ background: state.decision.fromColor }}>From</span>
+          <span className="chip" style={{ background: state.decision.toColor }}>To</span>
+          <span className="chip" style={{ background: state.decision.blendedColor }}>Blend</span>
+        </div>
+      </div>
+
+      <div className="suggestion-card">
+        <h4>Key to Palette Mapping</h4>
+        <div className="mapping-grid">
+          {groups.map((group) => (
+            <label className="tiny-text" key={group}>{group}
+              <select value={state.settings.keyToPalette[group]} onChange={(e) => onUpdateKeyMapping(group, e.target.value)}>
+                {state.settings.paletteLibrary.map((palette) => (
+                  <option key={palette.id} value={palette.id}>{palette.name}</option>
+                ))}
+              </select>
+            </label>
+          ))}
+        </div>
+      </div>
+
+      <div className="suggestion-card">
+        <h4>Custom Palette Editor</h4>
+        {state.settings.paletteLibrary.map((palette) => (
+          <div className="palette-row" key={palette.id}>
+            <p className="tiny-text"><strong>{palette.name}</strong></p>
+            <div className="row">
+              {palette.colors.map((color, index) => (
+                <input key={`${palette.id}-${index}`} type="color" value={color} onChange={(e) => onUpdatePaletteColor(palette.id, index, e.target.value)} />
+              ))}
+            </div>
+          </div>
+        ))}
       </div>
 
       <div className="fixture-grid">
