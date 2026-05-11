@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import type { DeckId, DeckState, EqState, FxState, Mode } from "./types";
 import type { KeyProfile } from "../services/keyboard/types";
+import type { RecommendationBias, RecommendationDirection } from "../modules/recommendations/types";
 import { createDefaultProfiles } from "../services/keyboard/profiles/defaults";
 
 interface AppState {
@@ -10,6 +11,9 @@ interface AppState {
   crossfader: number;
   masterGain: number;
   safeMixMode: boolean;
+  recommendationDirection: RecommendationDirection;
+  recommendationBias: RecommendationBias;
+  recommendationMood: string;
   fx: FxState;
   eq: EqState;
   profiles: KeyProfile[];
@@ -23,6 +27,9 @@ interface AppState {
   setCrossfader: (value: number) => void;
   setMasterGain: (value: number) => void;
   setSafeMixMode: (value: boolean) => void;
+  setRecommendationDirection: (value: RecommendationDirection) => void;
+  setRecommendationBias: (value: RecommendationBias) => void;
+  setRecommendationMood: (value: string) => void;
   setFx: (patch: Partial<FxState>) => void;
   setEq: (patch: Partial<EqState>) => void;
   setProfiles: (profiles: KeyProfile[], selectedProfileId: string) => void;
@@ -62,6 +69,9 @@ export const useAppStore = create<AppState>((set) => ({
   crossfader: 0.5,
   masterGain: 0.9,
   safeMixMode: true,
+  recommendationDirection: "maintain_groove",
+  recommendationBias: "balanced",
+  recommendationMood: "",
   fx: { slot1Active: false, slot2Active: false, momentaryActive: false },
   eq: { lowCut: false, highCut: false },
   profiles: profileDefaults.profiles,
@@ -75,6 +85,9 @@ export const useAppStore = create<AppState>((set) => ({
   setCrossfader: (value) => set({ crossfader: Math.max(0, Math.min(1, value)) }),
   setMasterGain: (value) => set({ masterGain: Math.max(0, Math.min(1, value)) }),
   setSafeMixMode: (safeMixMode) => set({ safeMixMode }),
+  setRecommendationDirection: (recommendationDirection) => set({ recommendationDirection }),
+  setRecommendationBias: (recommendationBias) => set({ recommendationBias }),
+  setRecommendationMood: (recommendationMood) => set({ recommendationMood }),
   setFx: (patch) => set((state) => ({ fx: { ...state.fx, ...patch } })),
   setEq: (patch) => set((state) => ({ eq: { ...state.eq, ...patch } })),
   setProfiles: (profiles, selectedProfileId) => set({ profiles, selectedProfileId }),

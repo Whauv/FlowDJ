@@ -8,11 +8,14 @@ import { KeyboardLegend } from "../components/keyboard/KeyboardLegend";
 import { MappingPanel } from "../components/keyboard/MappingPanel";
 import { OnboardingModal } from "../components/keyboard/OnboardingModal";
 import { SessionAnalyticsPanel } from "../components/analytics/SessionAnalyticsPanel";
+import { NextTrackPanel } from "../components/recommendations/NextTrackPanel";
+import { StrategySelector } from "../components/recommendations/StrategySelector";
 import { audioEngine } from "../services/audioEngine/engine";
 import { getLegendForMode, useKeyboardShortcuts } from "../services/keyboard/KeyboardManager";
 import type { FlowMode, KeyboardAction, KeyProfile } from "../services/keyboard/types";
 import { fetchKeyboardProfiles, saveKeyboardProfiles } from "../services/api/keyboardProfilesApi";
 import { appendSession, exportSessionCsv, exportSessionJson, finalizeSession, startSession } from "../services/api/sessionApi";
+import { fetchNextRecommendations, fetchRecommendationFixtures } from "../services/api/recommendationApi";
 import { useAppStore } from "../state/useAppStore";
 import type { DeckId } from "../state/types";
 import { clampNormalized, runAudioStateSanityChecks } from "../state/utils/audioStateTestUtils";
@@ -22,16 +25,14 @@ import { runTransitionTestCases } from "../modules/transitions/testCases";
 import type { TrackMeta } from "../modules/transitions/types";
 import type { SessionAnalyticsPayload, SessionTimelinePoint, SessionTransitionEvent } from "../modules/analytics/types";
 import { estimateCurrentEnergy, makeTimelinePoint } from "../modules/analytics/engine";
+import type { RecommendationResponse, RecommendationTrack } from "../modules/recommendations/types";
 
 function deckToTrackMeta(deckId: DeckId, deck: { trackName: string; bpm: number; musicalKey: string; energy: number; duration: number }): TrackMeta {
-  return {
-    id: `deck-${deckId}`,
-    title: deck.trackName,
-    bpm: deck.bpm || 124,
-    key: deck.musicalKey || "8A",
-    energy: deck.energy || 5,
-    duration: deck.duration || 300
-  };
+  return { id: `deck-${deckId}`, title: deck.trackName, bpm: deck.bpm || 124, key: deck.musicalKey || "8A", energy: deck.energy || 5, duration: deck.duration || 300 };
+}
+
+function toRecommendationTrack(deckId: DeckId, deck: { trackName: string; bpm: number; musicalKey: string; energy: number }): RecommendationTrack {
+  return { id: `deck-${deckId}`, title: deck.trackName || `Deck ${deckId}`, bpm: deck.bpm || 124, key: deck.musicalKey || "8A", energy: deck.energy || 5, genres: [] };
 }
 
 function keyClashRisk(a: string, b: string): number {
@@ -48,8 +49,11 @@ export function App() {
   const lastCrossfaderRef = useRef<number>(0.5);
   const timelineBufferRef = useRef<SessionTimelinePoint[]>([]);
   const transitionBufferRef = useRef<SessionTransitionEvent[]>([]);
+  const historyTrackIdsRef = useRef<string[]>([]);
 
   const [sessionAnalytics, setSessionAnalytics] = useState<SessionAnalyticsPayload | null>(null);
+  const [recommendationLibrary, setRecommendationLibrary] = useState<RecommendationTrack[]>([]);
+  const [recommendationResult, setRecommendationResult] = useState<RecommendationResponse | null>(null);
 
   const mode = useAppStore((s) => s.mode);
   const decks = useAppStore((s) => s.decks);
@@ -57,6 +61,9 @@ export function App() {
   const crossfader = useAppStore((s) => s.crossfader);
   const masterGain = useAppStore((s) => s.masterGain);
   const safeMixMode = useAppStore((s) => s.safeMixMode);
+  const recommendationDirection = useAppStore((s) => s.recommendationDirection);
+  const recommendationBias = useAppStore((s) => s.recommendationBias);
+  const recommendationMood = useAppStore((s) => s.recommendationMood);
   const fx = useAppStore((s) => s.fx);
   const eq = useAppStore((s) => s.eq);
   const profiles = useAppStore((s) => s.profiles);
@@ -71,6 +78,9 @@ export function App() {
   const setCrossfader = useAppStore((s) => s.setCrossfader);
   const setMasterGain = useAppStore((s) => s.setMasterGain);
   const setSafeMixMode = useAppStore((s) => s.setSafeMixMode);
+  const setRecommendationDirection = useAppStore((s) => s.setRecommendationDirection);
+  const setRecommendationBias = useAppStore((s) => s.setRecommendationBias);
+  const setRecommendationMood = useAppStore((s) => s.setRecommendationMood);
   const setFx = useAppStore((s) => s.setFx);
   const setEq = useAppStore((s) => s.setEq);
   const setProfiles = useAppStore((s) => s.setProfiles);
@@ -109,6 +119,8 @@ export function App() {
       notes: note
     };
     transitionBufferRef.current.push(event);
+    const toId = `deck-${toDeck}`;
+    if (!historyTrackIdsRef.current.includes(toId)) historyTrackIdsRef.current.push(toId);
   }, [decks]);
 
   useEffect(() => {
@@ -121,6 +133,8 @@ export function App() {
       const sid = await startSession(new Date().toISOString());
       sessionIdRef.current = sid;
       startMsRef.current = Date.now();
+      const fixtures = await fetchRecommendationFixtures();
+      setRecommendationLibrary(fixtures);
     })();
   }, [setLastAction]);
 
@@ -131,31 +145,37 @@ export function App() {
     })();
   }, [setProfiles]);
 
+  useEffect(() => { void saveKeyboardProfiles({ profiles, selectedProfileId }); }, [profiles, selectedProfileId]);
+
   useEffect(() => {
-    void saveKeyboardProfiles({ profiles, selectedProfileId });
-  }, [profiles, selectedProfileId]);
+    const interval = window.setInterval(async () => {
+      const currentTrack = toRecommendationTrack(activeDeck, decks[activeDeck]);
+      const dynamicLibrary = [toRecommendationTrack("A", decks.A), toRecommendationTrack("B", decks.B), ...recommendationLibrary];
+      const dedup = Array.from(new Map(dynamicLibrary.map((t) => [t.id, t])).values());
+      const result = await fetchNextRecommendations({
+        currentTrack,
+        library: dedup,
+        sessionHistoryIds: historyTrackIdsRef.current,
+        direction: recommendationDirection,
+        bias: recommendationBias,
+        targetMood: recommendationMood
+      });
+      setRecommendationResult(result);
+    }, 1400);
+    return () => window.clearInterval(interval);
+  }, [activeDeck, decks, recommendationBias, recommendationDirection, recommendationLibrary, recommendationMood]);
 
   useEffect(() => {
     const syncInterval = window.setInterval(() => {
       (Object.keys(decks) as DeckId[]).forEach((deckId) => {
         audioEngine.updateLoop(deckId);
-        patchDeck(deckId, {
-          currentTime: audioEngine.getCurrentTime(deckId),
-          duration: audioEngine.getDuration(deckId),
-          isPlaying: audioEngine.isPlaying(deckId)
-        });
+        patchDeck(deckId, { currentTime: audioEngine.getCurrentTime(deckId), duration: audioEngine.getDuration(deckId), isPlaying: audioEngine.isPlaying(deckId) });
       });
     }, 80);
 
     const timelineInterval = window.setInterval(() => {
-      const point = makeTimelinePoint(
-        Date.now() - startMsRef.current,
-        masterGain,
-        crossfader,
-        estimateCurrentEnergy(decks.A.energy, decks.B.energy, crossfader)
-      );
+      const point = makeTimelinePoint(Date.now() - startMsRef.current, masterGain, crossfader, estimateCurrentEnergy(decks.A.energy, decks.B.energy, crossfader));
       timelineBufferRef.current.push(point);
-
       const crossedCenter = (lastCrossfaderRef.current < 0.5 && crossfader >= 0.5) || (lastCrossfaderRef.current > 0.5 && crossfader <= 0.5);
       if (crossedCenter && decks.A.isLoaded && decks.B.isLoaded) {
         const fromDeck: DeckId = crossfader >= 0.5 ? "A" : "B";
@@ -176,11 +196,7 @@ export function App() {
       void appendSession(sid, timeline, transitions);
     }, 5000);
 
-    return () => {
-      window.clearInterval(syncInterval);
-      window.clearInterval(timelineInterval);
-      window.clearInterval(flushInterval);
-    };
+    return () => { window.clearInterval(syncInterval); window.clearInterval(timelineInterval); window.clearInterval(flushInterval); };
   }, [crossfader, decks, masterGain, patchDeck, recordTransitionEvent]);
 
   useEffect(() => {
@@ -192,21 +208,7 @@ export function App() {
     if (!file) return;
     try {
       const analysis = await audioEngine.loadTrack(deckId, file);
-      patchDeck(deckId, {
-        trackName: file.name,
-        bpm: analysis.bpm,
-        musicalKey: analysis.key,
-        energy: analysis.energy,
-        waveform: analysis.waveform,
-        duration: analysis.duration,
-        currentTime: 0,
-        isLoaded: true,
-        error: null,
-        cuePoint: null,
-        loopIn: null,
-        loopOut: null,
-        loopEnabled: false
-      });
+      patchDeck(deckId, { trackName: file.name, bpm: analysis.bpm, musicalKey: analysis.key, energy: analysis.energy, waveform: analysis.waveform, duration: analysis.duration, currentTime: 0, isLoaded: true, error: null, cuePoint: null, loopIn: null, loopOut: null, loopEnabled: false });
       setActiveDeck(deckId);
       setLastAction(`Loaded ${file.name} on Deck ${deckId}`);
     } catch (error) {
@@ -220,91 +222,46 @@ export function App() {
       const playing = await audioEngine.togglePlay(deckId);
       patchDeck(deckId, { isPlaying: playing });
       setLastAction(`Deck ${deckId} ${playing ? "playing" : "paused"}`);
-    } catch (error) {
-      setLastAction(error instanceof Error ? error.message : "Playback error");
-    }
+    } catch (error) { setLastAction(error instanceof Error ? error.message : "Playback error"); }
   }, [patchDeck, setLastAction]);
 
-  const onSeekTo = useCallback((deckId: DeckId, time: number) => {
-    const next = audioEngine.seek(deckId, time);
-    patchDeck(deckId, { currentTime: next });
-  }, [patchDeck]);
-
+  const onSeekTo = useCallback((deckId: DeckId, time: number) => { patchDeck(deckId, { currentTime: audioEngine.seek(deckId, time) }); }, [patchDeck]);
   const onGainChange = useCallback((deckId: DeckId, gain: number) => {
     patchDeck(deckId, { gain });
     audioEngine.setCrossfader(crossfader, { A: deckId === "A" ? gain : decks.A.gain, B: deckId === "B" ? gain : decks.B.gain });
   }, [crossfader, decks.A.gain, decks.B.gain, patchDeck]);
-
   const onCue = useCallback((deckId: DeckId) => {
     const deck = decks[deckId];
-    if (deck.cuePoint === null) {
-      const at = audioEngine.getCurrentTime(deckId);
-      patchDeck(deckId, { cuePoint: at });
-      setLastAction(`Cue set on Deck ${deckId}`);
-    } else {
-      const next = audioEngine.seek(deckId, deck.cuePoint);
-      patchDeck(deckId, { currentTime: next });
-      setLastAction(`Cue jumped on Deck ${deckId}`);
-    }
+    if (deck.cuePoint === null) { patchDeck(deckId, { cuePoint: audioEngine.getCurrentTime(deckId) }); setLastAction(`Cue set on Deck ${deckId}`); }
+    else { patchDeck(deckId, { currentTime: audioEngine.seek(deckId, deck.cuePoint) }); setLastAction(`Cue jumped on Deck ${deckId}`); }
   }, [decks, patchDeck, setLastAction]);
-
-  const onLoop = useCallback((deckId: DeckId) => {
-    const deck = decks[deckId];
-    const loop = audioEngine.setLoopInOut(deckId, deck.currentTime);
-    patchDeck(deckId, loop);
-    setLastAction(`Deck ${deckId} loop ${loop.loopEnabled ? "enabled" : "updated"}`);
-  }, [decks, patchDeck, setLastAction]);
-
-  const onAutoloop = useCallback((deckId: DeckId) => {
-    const deck = decks[deckId];
-    const loop = audioEngine.setAutoloop(deckId, deck.bpm);
-    patchDeck(deckId, loop);
-    setLastAction(`Deck ${deckId} autoloop enabled`);
-  }, [decks, patchDeck, setLastAction]);
+  const onLoop = useCallback((deckId: DeckId) => { patchDeck(deckId, audioEngine.setLoopInOut(deckId, decks[deckId].currentTime)); setLastAction(`Deck ${deckId} loop updated`); }, [decks, patchDeck, setLastAction]);
+  const onAutoloop = useCallback((deckId: DeckId) => { patchDeck(deckId, audioEngine.setAutoloop(deckId, decks[deckId].bpm)); setLastAction(`Deck ${deckId} autoloop enabled`); }, [decks, patchDeck, setLastAction]);
 
   const onRecoveryEmergencyFade = useCallback(() => {
-    const target = activeDeck;
-    const other = target === "A" ? "B" : "A";
-    onGainChange(target, 1);
-    onGainChange(other, 0.1);
-    setCrossfader(target === "A" ? 0.1 : 0.9);
-    recordTransitionEvent(other, target, "Recovery emergency fade", false, true);
-    setLastAction("Recovery: emergency fade executed");
+    const target = activeDeck; const other = target === "A" ? "B" : "A";
+    onGainChange(target, 1); onGainChange(other, 0.1); setCrossfader(target === "A" ? 0.1 : 0.9);
+    recordTransitionEvent(other, target, "Recovery emergency fade", false, true); setLastAction("Recovery: emergency fade executed");
   }, [activeDeck, onGainChange, recordTransitionEvent, setCrossfader, setLastAction]);
-
   const onRecoveryKillSwitch = useCallback(() => {
-    setMasterGain(0);
-    void onTogglePlay("A");
-    void onTogglePlay("B");
-    recordTransitionEvent("A", "B", "Recovery kill switch", false, true);
-    setLastAction("Recovery: kill switch triggered (held)");
+    setMasterGain(0); void onTogglePlay("A"); void onTogglePlay("B");
+    recordTransitionEvent("A", "B", "Recovery kill switch", false, true); setLastAction("Recovery: kill switch triggered (held)");
   }, [onTogglePlay, recordTransitionEvent, setLastAction, setMasterGain]);
-
   const onRecoverySafeTransition = useCallback(() => {
-    const target = activeDeck;
-    const other = target === "A" ? "B" : "A";
+    const target = activeDeck; const other = target === "A" ? "B" : "A";
     if (!decks[target].isPlaying) void onTogglePlay(target);
-    onGainChange(target, 0.95);
-    onGainChange(other, 0.25);
-    setCrossfader(target === "A" ? 0.2 : 0.8);
-    setMasterGain(0.85);
-    recordTransitionEvent(other, target, "Recovery safe transition", decks[target].loopEnabled || decks[other].loopEnabled, true);
-    setLastAction("Recovery: safe transition applied");
+    onGainChange(target, 0.95); onGainChange(other, 0.25); setCrossfader(target === "A" ? 0.2 : 0.8); setMasterGain(0.85);
+    recordTransitionEvent(other, target, "Recovery safe transition", decks[target].loopEnabled || decks[other].loopEnabled, true); setLastAction("Recovery: safe transition applied");
   }, [activeDeck, decks, onGainChange, onTogglePlay, recordTransitionEvent, setCrossfader, setLastAction, setMasterGain]);
 
   const handleEndSession = useCallback(async () => {
-    const sid = sessionIdRef.current;
-    if (!sid) return;
+    const sid = sessionIdRef.current; if (!sid) return;
     if (timelineBufferRef.current.length || transitionBufferRef.current.length) {
       await appendSession(sid, [...timelineBufferRef.current], [...transitionBufferRef.current]);
-      timelineBufferRef.current = [];
-      transitionBufferRef.current = [];
+      timelineBufferRef.current = []; transitionBufferRef.current = [];
     }
     const payload = await finalizeSession(sid, new Date().toISOString());
-    if (payload) {
-      setSessionAnalytics(payload);
-      setLastAction(`Session ${payload.id} finalized`);
-    }
+    if (payload) { setSessionAnalytics(payload); setLastAction(`Session ${payload.id} finalized`); }
   }, [setLastAction]);
 
   const handleKeyboardAction = useCallback((action: KeyboardAction, focusedDeck: DeckId) => {
@@ -369,6 +326,15 @@ export function App() {
         <WaveformPanel deckA={decks.A} deckB={decks.B} />
         <KeyboardLegend modeLabel={mode.toUpperCase()} items={legendItems} />
         <LibraryPanel />
+        <StrategySelector
+          direction={recommendationDirection}
+          bias={recommendationBias}
+          targetMood={recommendationMood}
+          onDirectionChange={setRecommendationDirection}
+          onBiasChange={setRecommendationBias}
+          onMoodChange={setRecommendationMood}
+        />
+        <NextTrackPanel recommendations={recommendationResult} />
       </main>
       <SessionAnalyticsPanel
         analytics={sessionAnalytics}

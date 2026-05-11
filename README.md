@@ -1,66 +1,45 @@
-# FlowDJ (Phase 5 Post-Mix Analytics)
+# FlowDJ (Phase 6 Smart Track Recommendation Layer)
 
-FlowDJ is a laptop-native DJ system with keyboard-first mixing and now a complete session analytics layer to help users improve over time.
+FlowDJ now includes a lightweight AI-assisted next-track recommender built as a hybrid metadata + rule engine (ML-replaceable service boundary).
 
-## Phase 5 Features
-- Session timeline recorder (master gain, crossfader, energy over time)
-- Transition event log (per transition metrics)
-- Backend session persistence APIs
-- Post-session scorecard and transition-by-transition report
-- Replay panel (transition markers)
-- Improvement suggestion panel
-- Export session as JSON and CSV
+## Phase 6 Features
+- Recommended next tracks in live panel
+- Human-readable reason strings per recommendation
+- Strategy selector:
+  - Build Energy
+  - Maintain Groove
+  - Cool Down
+  - Surprise Switch
+- Mood filter input (for tag bias)
+- Bias control:
+  - Safe
+  - Balanced
+  - Adventurous
+- Session-history-aware filtering (avoid repeating already-used tracks)
 
-## Metrics Tracked and Scored
-- Transition timing
-- Dead air duration
-- Overlap quality
-- Abrupt volume changes
-- BPM mismatch severity
-- Key clash risk
-- Loop usage quality
-- Recovery actions used
-- Average energy flow across the set
+## Hybrid Engine Inputs
+- BPM
+- Musical key (Camelot relation)
+- Energy estimate
+- Genre tags (when available)
+- Session history IDs
+- Desired direction and bias
 
-## Scoring Logic
-Scoring is rule-based and transparent in backend analytics pipeline (`backend/app/core/session_store.py`).
+## Backend Service/API
+- Service module: `backend/app/core/recommendation_engine.py`
+- Fixtures: `backend/app/core/recommendation_fixtures.json`
+- API routes:
+  - `GET /recommendations/fixtures`
+  - `POST /recommendations/next`
 
-Examples:
-- Dead air is estimated from low master-gain timeline windows.
-- BPM mismatch severity is average mismatch across logged transitions.
-- Key clash risk is averaged from transition harmonic risk estimates.
-- Total score is a weighted aggregate of timing/overlap/abruptness/mismatch/risk/loop/dead-air factors.
-
-## Backend Session Model + APIs
-Defined in:
-- `backend/app/api/schemas.py`
-- `backend/app/core/session_store.py`
-- `backend/app/api/routes.py`
-
-Endpoints:
-- `POST /sessions/start`
-- `POST /sessions/append`
-- `POST /sessions/finalize`
-- `GET /sessions`
-- `GET /sessions/{session_id}`
-- `GET /sessions/{session_id}/export/json`
-- `GET /sessions/{session_id}/export/csv`
-
-## Frontend Analytics Pipeline
-- Timeline sampling and transition logging integrated in `frontend/src/app/App.tsx`
-- Analytics panel in `frontend/src/components/analytics/SessionAnalyticsPanel.tsx`
-- Session API client in `frontend/src/services/api/sessionApi.ts`
-- Helpers in `frontend/src/modules/analytics/`
+## Frontend Integration
+- API client: `frontend/src/services/api/recommendationApi.ts`
+- Strategy UI: `frontend/src/components/recommendations/StrategySelector.tsx`
+- Suggestions UI: `frontend/src/components/recommendations/NextTrackPanel.tsx`
+- Recommendation types: `frontend/src/modules/recommendations/types.ts`
+- App wiring: `frontend/src/app/App.tsx`
 
 ## Run
-### Frontend
-```bash
-cd frontend
-npm install
-npm run dev
-```
-
-### Backend
 ```bash
 cd backend
 python -m venv .venv
@@ -69,7 +48,8 @@ pip install -e .
 uvicorn app.main:app --reload --port 8000
 ```
 
-## Notes
-- Keep backend running to persist and finalize analytics sessions.
-- Use the Session Analytics panel to end a session and generate scorecard/report.
-- Export buttons provide JSON/CSV session artifacts for review.
+```bash
+cd frontend
+npm install
+npm run dev
+```

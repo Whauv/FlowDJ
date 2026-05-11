@@ -4,6 +4,8 @@ from pydantic import BaseModel, Field
 
 
 ModeName = Literal["browse", "mix", "fx", "recovery"]
+RecommendationDirection = Literal["build_energy", "maintain_groove", "cool_down", "surprise_switch"]
+RecommendationBias = Literal["safe", "balanced", "adventurous"]
 
 
 class MappingEntry(BaseModel):
@@ -84,3 +86,34 @@ class SessionAppendRequest(BaseModel):
 class SessionFinalizeRequest(BaseModel):
     id: str
     ended_at_iso: str
+
+
+class RecommendationTrack(BaseModel):
+    id: str
+    title: str
+    bpm: float
+    key: str
+    energy: float = Field(ge=0.0, le=10.0)
+    genres: list[str] = []
+
+
+class RecommendationRequest(BaseModel):
+    current_track: RecommendationTrack
+    library: list[RecommendationTrack]
+    session_history_ids: list[str] = []
+    direction: RecommendationDirection = "maintain_groove"
+    bias: RecommendationBias = "balanced"
+    target_mood: str = ""
+
+
+class RecommendationItem(BaseModel):
+    track: RecommendationTrack
+    score: float
+    reasons: list[str]
+
+
+class RecommendationResponse(BaseModel):
+    direction: RecommendationDirection
+    bias: RecommendationBias
+    target_mood: str
+    recommendations: list[RecommendationItem]
