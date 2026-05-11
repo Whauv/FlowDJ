@@ -9,6 +9,7 @@ interface AppState {
   activeDeck: DeckId;
   crossfader: number;
   masterGain: number;
+  safeMixMode: boolean;
   fx: FxState;
   eq: EqState;
   profiles: KeyProfile[];
@@ -21,6 +22,7 @@ interface AppState {
   patchDeck: (deckId: DeckId, patch: Partial<DeckState>) => void;
   setCrossfader: (value: number) => void;
   setMasterGain: (value: number) => void;
+  setSafeMixMode: (value: boolean) => void;
   setFx: (patch: Partial<FxState>) => void;
   setEq: (patch: Partial<EqState>) => void;
   setProfiles: (profiles: KeyProfile[], selectedProfileId: string) => void;
@@ -35,6 +37,8 @@ function makeDeck(id: DeckId): DeckState {
     id,
     trackName: "No track loaded",
     bpm: 0,
+    musicalKey: "8A",
+    energy: 5,
     isPlaying: false,
     gain: 0.8,
     duration: 0,
@@ -57,6 +61,7 @@ export const useAppStore = create<AppState>((set) => ({
   activeDeck: "A",
   crossfader: 0.5,
   masterGain: 0.9,
+  safeMixMode: true,
   fx: { slot1Active: false, slot2Active: false, momentaryActive: false },
   eq: { lowCut: false, highCut: false },
   profiles: profileDefaults.profiles,
@@ -69,6 +74,7 @@ export const useAppStore = create<AppState>((set) => ({
   patchDeck: (deckId, patch) => set((state) => ({ decks: { ...state.decks, [deckId]: { ...state.decks[deckId], ...patch } } })),
   setCrossfader: (value) => set({ crossfader: Math.max(0, Math.min(1, value)) }),
   setMasterGain: (value) => set({ masterGain: Math.max(0, Math.min(1, value)) }),
+  setSafeMixMode: (safeMixMode) => set({ safeMixMode }),
   setFx: (patch) => set((state) => ({ fx: { ...state.fx, ...patch } })),
   setEq: (patch) => set((state) => ({ eq: { ...state.eq, ...patch } })),
   setProfiles: (profiles, selectedProfileId) => set({ profiles, selectedProfileId }),

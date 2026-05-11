@@ -5,6 +5,8 @@ export interface DeckState {
   id: DeckId;
   trackName: string;
   bpm: number;
+  musicalKey: string;
+  energy: number;
   isPlaying: boolean;
   gain: number;
   duration: number;
