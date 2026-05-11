@@ -1,0 +1,105 @@
+import type { KeyProfile, KeyboardProfilesPayload, MappingEntry, ModeMappings } from "../types";
+
+const browse: MappingEntry[] = [
+  { action: "modeBrowse", code: "Digit1", label: "1", description: "Switch to Browse Mode" },
+  { action: "modeMix", code: "Digit2", label: "2", description: "Switch to Mix Mode" },
+  { action: "modeFx", code: "Digit3", label: "3", description: "Switch to FX Mode" },
+  { action: "modeRecovery", code: "Digit4", label: "4", description: "Switch to Recovery Mode" },
+  { action: "activeDeck", code: "Tab", label: "Tab", description: "Switch active deck" },
+  { action: "loadDeckA", code: "KeyQ", label: "Q", description: "Load track to Deck A" },
+  { action: "loadDeckB", code: "KeyP", label: "P", description: "Load track to Deck B" },
+  { action: "browseUp", code: "ArrowUp", label: "Up", description: "Move library selection up" },
+  { action: "browseDown", code: "ArrowDown", label: "Down", description: "Move library selection down" },
+  { action: "browseSearch", code: "Slash", label: "/", description: "Focus search" },
+  { action: "showHelp", code: "KeyH", label: "H", description: "Open onboarding/help" },
+  { action: "openMapping", code: "KeyG", label: "G", description: "Open key mapping panel" }
+];
+
+const mix: MappingEntry[] = [
+  { action: "modeBrowse", code: "Digit1", label: "1", description: "Switch to Browse Mode" },
+  { action: "modeMix", code: "Digit2", label: "2", description: "Switch to Mix Mode" },
+  { action: "modeFx", code: "Digit3", label: "3", description: "Switch to FX Mode" },
+  { action: "modeRecovery", code: "Digit4", label: "4", description: "Switch to Recovery Mode" },
+  { action: "activeDeck", code: "Tab", label: "Tab", description: "Switch active deck" },
+  { action: "togglePlayA", code: "KeyZ", label: "Z", description: "Play/Pause Deck A" },
+  { action: "togglePlayB", code: "KeyX", label: "X", description: "Play/Pause Deck B" },
+  { action: "cue", code: "KeyC", label: "C", description: "Set/Jump cue on active deck" },
+  { action: "sync", code: "KeyV", label: "V", description: "Sync active deck BPM" },
+  { action: "seekBack", code: "ArrowLeft", label: "Left", description: "Seek active deck -5s" },
+  { action: "seekForward", code: "ArrowRight", label: "Right", description: "Seek active deck +5s" },
+  { action: "crossfaderLeft", code: "Comma", label: ",", description: "Crossfader nudge left" },
+  { action: "crossfaderRight", code: "Period", label: ".", description: "Crossfader nudge right" },
+  { action: "eqLowToggle", code: "KeyB", label: "B", description: "Toggle low EQ macro" },
+  { action: "eqHighToggle", code: "KeyN", label: "N", description: "Toggle high EQ macro" },
+  { action: "loop", code: "KeyL", label: "L", description: "Loop in/out" },
+  { action: "autoloop", code: "KeyK", label: "K", description: "4-beat autoloop" }
+];
+
+const fx: MappingEntry[] = [
+  { action: "modeBrowse", code: "Digit1", label: "1", description: "Switch to Browse Mode" },
+  { action: "modeMix", code: "Digit2", label: "2", description: "Switch to Mix Mode" },
+  { action: "modeFx", code: "Digit3", label: "3", description: "Switch to FX Mode" },
+  { action: "modeRecovery", code: "Digit4", label: "4", description: "Switch to Recovery Mode" },
+  { action: "activeDeck", code: "Tab", label: "Tab", description: "Switch active deck" },
+  { action: "fxTrigger1", code: "KeyJ", label: "J", description: "Trigger FX slot 1" },
+  { action: "fxTrigger2", code: "KeyK", label: "K", description: "Trigger FX slot 2" },
+  { action: "fxMomentary", code: "KeyL", label: "L", description: "Momentary FX hold" },
+  { action: "volumeDown", code: "KeyA", label: "A", description: "Deck volume down" },
+  { action: "volumeUp", code: "KeyS", label: "S", description: "Deck volume up" },
+  { action: "masterDown", code: "KeyM", label: "M", description: "Master down" },
+  { action: "masterUp", code: "Comma", label: ",", description: "Master up" }
+];
+
+const recovery: MappingEntry[] = [
+  { action: "modeBrowse", code: "Digit1", label: "1", description: "Switch to Browse Mode" },
+  { action: "modeMix", code: "Digit2", label: "2", description: "Switch to Mix Mode" },
+  { action: "modeFx", code: "Digit3", label: "3", description: "Switch to FX Mode" },
+  { action: "modeRecovery", code: "Digit4", label: "4", description: "Switch to Recovery Mode" },
+  { action: "recoveryEmergencyFade", code: "KeyF", label: "F", description: "Emergency fade to active deck" },
+  { action: "recoveryKillSwitch", code: "KeyR", label: "R (hold)", description: "Hold to execute kill switch" },
+  { action: "recoverySafeTransition", code: "KeyT", label: "T", description: "Instant safe transition" },
+  { action: "masterDown", code: "KeyN", label: "N", description: "Lower master output" },
+  { action: "masterUp", code: "KeyM", label: "M", description: "Raise master output" }
+];
+
+function makeMappings(): ModeMappings {
+  return { browse: [...browse], mix: [...mix], fx: [...fx], recovery: [...recovery] };
+}
+
+export function createDefaultProfiles(): KeyboardProfilesPayload {
+  const defaultProfile: KeyProfile = {
+    id: "default-laptop",
+    name: "Default Laptop",
+    compact: false,
+    mappings: makeMappings()
+  };
+
+  const oneHandProfile: KeyProfile = {
+    id: "one-hand-left",
+    name: "One-Hand Left",
+    compact: true,
+    mappings: {
+      ...makeMappings(),
+      mix: [
+        { action: "modeBrowse", code: "Digit1", label: "1", description: "Browse mode" },
+        { action: "modeMix", code: "Digit2", label: "2", description: "Mix mode" },
+        { action: "modeFx", code: "Digit3", label: "3", description: "FX mode" },
+        { action: "modeRecovery", code: "Digit4", label: "4", description: "Recovery mode" },
+        { action: "activeDeck", code: "Tab", label: "Tab", description: "Switch deck" },
+        { action: "togglePlayA", code: "KeyA", label: "A", description: "Play/Pause A" },
+        { action: "togglePlayB", code: "KeyS", label: "S", description: "Play/Pause B" },
+        { action: "cue", code: "KeyD", label: "D", description: "Cue" },
+        { action: "sync", code: "KeyF", label: "F", description: "Sync" },
+        { action: "crossfaderLeft", code: "KeyQ", label: "Q", description: "Crossfader left" },
+        { action: "crossfaderRight", code: "KeyW", label: "W", description: "Crossfader right" },
+        { action: "seekBack", code: "KeyZ", label: "Z", description: "Seek back" },
+        { action: "seekForward", code: "KeyX", label: "X", description: "Seek forward" }
+      ]
+    }
+  };
+
+  return {
+    selectedProfileId: defaultProfile.id,
+    profiles: [defaultProfile, oneHandProfile]
+  };
+}

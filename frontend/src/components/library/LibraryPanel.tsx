@@ -1,19 +1,9 @@
-﻿import { useAppStore } from "../../state/useAppStore";
-
 export function LibraryPanel() {
-  const shortcuts = useAppStore((s) => s.shortcuts);
-
   return (
     <section className="panel library">
       <h3>Library</h3>
-      <p>Track browser placeholder with keyboard mappings:</p>
-      <div className="row">
-        {shortcuts.map((shortcut) => (
-          <span className="pill" key={shortcut.action}>
-            {shortcut.description}: <span className="kbd">{shortcut.combo}</span>
-          </span>
-        ))}
-      </div>
+      <p>Browse Mode controls are now mode-aware and keyboard-first.</p>
+      <p className="tiny-text">Use Up/Down for crate navigation, / for search focus placeholder, Q/P to load deck.</p>
     </section>
   );
 }
