@@ -11,12 +11,14 @@ import { SessionAnalyticsPanel } from "../components/analytics/SessionAnalyticsP
 import { NextTrackPanel } from "../components/recommendations/NextTrackPanel";
 import { StrategySelector } from "../components/recommendations/StrategySelector";
 import { FlowLightPreviewPanel } from "../components/lighting/FlowLightPreviewPanel";
+import { DeviceIntegrationPanel } from "../components/lighting/DeviceIntegrationPanel";
 import { audioEngine } from "../services/audioEngine/engine";
 import { getLegendForMode, useKeyboardShortcuts } from "../services/keyboard/KeyboardManager";
 import type { FlowMode, KeyboardAction, KeyProfile } from "../services/keyboard/types";
 import { fetchKeyboardProfiles, saveKeyboardProfiles } from "../services/api/keyboardProfilesApi";
 import { appendSession, exportSessionCsv, exportSessionJson, finalizeSession, startSession } from "../services/api/sessionApi";
 import { fetchNextRecommendations, fetchRecommendationFixtures } from "../services/api/recommendationApi";
+import { fetchTrackAssets, importYoutubeMp3, uploadOwnedMp3, type TrackAsset } from "../services/api/trackSourcesApi";
 import { useAppStore } from "../state/useAppStore";
 import type { DeckId } from "../state/types";
 import { clampNormalized, runAudioStateSanityChecks } from "../state/utils/audioStateTestUtils";
@@ -29,7 +31,7 @@ import { estimateCurrentEnergy, makeTimelinePoint } from "../modules/analytics/e
 import type { RecommendationResponse, RecommendationTrack } from "../modules/recommendations/types";
 import { flowLightEventBus } from "../modules/flowlight/eventBus";
 import { flowLightManager } from "../modules/flowlight/manager";
-import type { FlowLightState } from "../modules/flowlight/types";
+import type { AdapterDiagnostics, AdapterKind, FlowLightState, HardwareMode } from "../modules/flowlight/types";
 
 function deckToTrackMeta(deckId: DeckId, deck: { trackName: string; bpm: number; musicalKey: string; energy: number; duration: number }): TrackMeta {
   return { id: `deck-${deckId}`, title: deck.trackName, bpm: deck.bpm || 124, key: deck.musicalKey || "8A", energy: deck.energy || 5, duration: deck.duration || 300 };
@@ -59,6 +61,11 @@ export function App() {
   const [recommendationLibrary, setRecommendationLibrary] = useState<RecommendationTrack[]>([]);
   const [recommendationResult, setRecommendationResult] = useState<RecommendationResponse | null>(null);
   const [flowLightState, setFlowLightState] = useState<FlowLightState>(flowLightManager.getState());
+  const [hardwareMode, setHardwareMode] = useState<HardwareMode>(flowLightManager.getHardwareMode());
+  const [adapterDiagnostics, setAdapterDiagnostics] = useState<AdapterDiagnostics[]>(flowLightManager.getDiagnostics());
+  const [libraryTracks, setLibraryTracks] = useState<TrackAsset[]>([]);
+  const [libraryBusy, setLibraryBusy] = useState(false);
+  const [libraryError, setLibraryError] = useState<string | null>(null);
 
   const mode = useAppStore((s) => s.mode);
   const decks = useAppStore((s) => s.decks);
@@ -140,6 +147,12 @@ export function App() {
       startMsRef.current = Date.now();
       const fixtures = await fetchRecommendationFixtures();
       setRecommendationLibrary(fixtures);
+      try {
+        const tracks = await fetchTrackAssets();
+        setLibraryTracks(tracks);
+      } catch {
+        setLibraryError("Could not fetch track library.");
+      }
     })();
   }, [setLastAction]);
 
@@ -253,6 +266,13 @@ export function App() {
     setFlowLightState(flowLightManager.getState());
   }, [activeDeck, crossfader, decks.A.bpm, decks.A.currentTime, decks.A.duration, decks.A.energy, decks.A.musicalKey, decks.B.bpm, decks.B.currentTime, decks.B.duration, decks.B.energy, decks.B.musicalKey]);
 
+  useEffect(() => {
+    const interval = window.setInterval(() => {
+      setAdapterDiagnostics(flowLightManager.getDiagnostics());
+    }, 1000);
+    return () => window.clearInterval(interval);
+  }, []);
+
   const onLoadFile = useCallback(async (deckId: DeckId, file: File | null) => {
     if (!file) return;
     try {
@@ -260,6 +280,22 @@ export function App() {
       patchDeck(deckId, { trackName: file.name, bpm: analysis.bpm, musicalKey: analysis.key, energy: analysis.energy, waveform: analysis.waveform, duration: analysis.duration, currentTime: 0, isLoaded: true, error: null, cuePoint: null, loopIn: null, loopOut: null, loopEnabled: false });
       setActiveDeck(deckId);
       setLastAction(`Loaded ${file.name} on Deck ${deckId}`);
+    } catch (error) {
+      patchDeck(deckId, { error: error instanceof Error ? error.message : "Failed to load track" });
+      setLastAction(`Deck ${deckId} load failed`);
+    }
+  }, [patchDeck, setActiveDeck, setLastAction]);
+
+  const loadTrackFromAsset = useCallback(async (deckId: DeckId, track: TrackAsset) => {
+    try {
+      const response = await fetch(`http://localhost:8000${track.url}`);
+      if (!response.ok) throw new Error("Failed to fetch track audio.");
+      const blob = await response.blob();
+      const file = new File([blob], track.filename, { type: "audio/mpeg" });
+      const analysis = await audioEngine.loadTrack(deckId, file);
+      patchDeck(deckId, { trackName: track.title, bpm: analysis.bpm, musicalKey: analysis.key, energy: analysis.energy, waveform: analysis.waveform, duration: analysis.duration, currentTime: 0, isLoaded: true, error: null, cuePoint: null, loopIn: null, loopOut: null, loopEnabled: false });
+      setActiveDeck(deckId);
+      setLastAction(`Loaded ${track.title} on Deck ${deckId}`);
     } catch (error) {
       patchDeck(deckId, { error: error instanceof Error ? error.message : "Failed to load track" });
       setLastAction(`Deck ${deckId} load failed`);
@@ -366,43 +402,105 @@ export function App() {
   useKeyboardShortcuts({ mode: mode as FlowMode, activeDeck, profile: activeProfile, onAction: handleKeyboardAction });
 
   return (
-    <div className="app-shell">
+    <div className="app-shell performance-shell">
       <TopBar mode={mode} activeDeck={activeDeck} lastAction={lastAction} audioStatus={audioEngine.getStatus()} />
-      <main className="main-layout">
-        <DeckPanel deck={decks.A} isActive={activeDeck === "A"} fileInputRef={fileInputARef} onSelect={setActiveDeck} onLoadFile={onLoadFile} onTogglePlay={onTogglePlay} onSeekTo={onSeekTo} onGainChange={onGainChange} onCue={onCue} onLoop={onLoop} />
-        <DeckPanel deck={decks.B} isActive={activeDeck === "B"} fileInputRef={fileInputBRef} onSelect={setActiveDeck} onLoadFile={onLoadFile} onTogglePlay={onTogglePlay} onSeekTo={onSeekTo} onGainChange={onGainChange} onCue={onCue} onLoop={onLoop} />
-        <MixerPanel crossfader={crossfader} masterGain={masterGain} safeMixMode={safeMixMode} guidance={transitionGuidance} onCrossfaderChange={setCrossfader} onMasterGainChange={setMasterGain} onSafeMixToggle={setSafeMixMode} />
-        <WaveformPanel deckA={decks.A} deckB={decks.B} />
-        <KeyboardLegend modeLabel={mode.toUpperCase()} items={legendItems} />
-        <LibraryPanel />
-        <StrategySelector
-          direction={recommendationDirection}
-          bias={recommendationBias}
-          targetMood={recommendationMood}
-          onDirectionChange={setRecommendationDirection}
-          onBiasChange={setRecommendationBias}
-          onMoodChange={setRecommendationMood}
-        />
-        <NextTrackPanel recommendations={recommendationResult} />
-        <FlowLightPreviewPanel
-          state={flowLightState}
-          onSettingsChange={(next) => {
-            flowLightManager.updateSettings(next);
-            setFlowLightState(flowLightManager.getState());
-          }}
-          onApplyMoodPreset={(presetId) => {
-            flowLightManager.applyMoodPreset(presetId);
-            setFlowLightState(flowLightManager.getState());
-          }}
-          onUpdatePaletteColor={(paletteId, index, color) => {
-            flowLightManager.updatePaletteColor(paletteId, index, color);
-            setFlowLightState(flowLightManager.getState());
-          }}
-          onUpdateKeyMapping={(group, paletteId) => {
-            flowLightManager.updateKeyMapping(group, paletteId);
-            setFlowLightState(flowLightManager.getState());
-          }}
-        />
+      <main className="console-layout">
+        <aside className="left-rack">
+          <DeviceIntegrationPanel
+            mode={hardwareMode}
+            diagnostics={adapterDiagnostics}
+            onModeChange={(mode) => {
+              flowLightManager.setHardwareMode(mode);
+              setHardwareMode(mode);
+              setAdapterDiagnostics(flowLightManager.getDiagnostics());
+            }}
+            onDiscover={(kind: AdapterKind) => {
+              void flowLightManager.discover(kind).then(() => setAdapterDiagnostics(flowLightManager.getDiagnostics()));
+            }}
+            onConnect={(kind: AdapterKind, deviceId?: string) => {
+              void flowLightManager.connectAdapter(kind, deviceId).then(() => setAdapterDiagnostics(flowLightManager.getDiagnostics()));
+            }}
+            onDisconnect={(kind: AdapterKind) => {
+              void flowLightManager.disconnectAdapter(kind).then(() => setAdapterDiagnostics(flowLightManager.getDiagnostics()));
+            }}
+          />
+          <KeyboardLegend modeLabel={mode.toUpperCase()} items={legendItems} />
+        </aside>
+
+        <section className="center-stage">
+          <div className="stage-anchor">
+            <FlowLightPreviewPanel
+              state={flowLightState}
+              onSettingsChange={(next) => {
+                flowLightManager.updateSettings(next);
+                setFlowLightState(flowLightManager.getState());
+              }}
+              onApplyMoodPreset={(presetId) => {
+                flowLightManager.applyMoodPreset(presetId);
+                setFlowLightState(flowLightManager.getState());
+              }}
+              onUpdatePaletteColor={(paletteId, index, color) => {
+                flowLightManager.updatePaletteColor(paletteId, index, color);
+                setFlowLightState(flowLightManager.getState());
+              }}
+              onUpdateKeyMapping={(group, paletteId) => {
+                flowLightManager.updateKeyMapping(group, paletteId);
+                setFlowLightState(flowLightManager.getState());
+              }}
+            />
+          </div>
+          <div className="deck-row">
+            <DeckPanel deck={decks.A} isActive={activeDeck === "A"} fileInputRef={fileInputARef} onSelect={setActiveDeck} onLoadFile={onLoadFile} onTogglePlay={onTogglePlay} onSeekTo={onSeekTo} onGainChange={onGainChange} onCue={onCue} onLoop={onLoop} />
+            <MixerPanel crossfader={crossfader} masterGain={masterGain} safeMixMode={safeMixMode} guidance={transitionGuidance} onCrossfaderChange={setCrossfader} onMasterGainChange={setMasterGain} onSafeMixToggle={setSafeMixMode} />
+            <DeckPanel deck={decks.B} isActive={activeDeck === "B"} fileInputRef={fileInputBRef} onSelect={setActiveDeck} onLoadFile={onLoadFile} onTogglePlay={onTogglePlay} onSeekTo={onSeekTo} onGainChange={onGainChange} onCue={onCue} onLoop={onLoop} />
+          </div>
+          <WaveformPanel deckA={decks.A} deckB={decks.B} />
+        </section>
+
+        <aside className="right-stack">
+          <LibraryPanel
+            tracks={libraryTracks}
+            busy={libraryBusy}
+            error={libraryError}
+            onUploadMp3={(file) => {
+              if (!file) return;
+              setLibraryBusy(true);
+              setLibraryError(null);
+              void uploadOwnedMp3(file)
+                .then((track) => {
+                  setLibraryTracks((prev) => [track, ...prev.filter((item) => item.id !== track.id)]);
+                  setLastAction(`Added ${track.title} to library`);
+                })
+                .catch((error: unknown) => setLibraryError(error instanceof Error ? error.message : "Upload failed"))
+                .finally(() => setLibraryBusy(false));
+            }}
+            onImportYoutube={(url) => {
+              const trimmed = url.trim();
+              if (!trimmed) return;
+              setLibraryBusy(true);
+              setLibraryError(null);
+              void importYoutubeMp3(trimmed)
+                .then((track) => {
+                  setLibraryTracks((prev) => [track, ...prev.filter((item) => item.id !== track.id)]);
+                  setLastAction(`Imported ${track.title} from YouTube`);
+                })
+                .catch((error: unknown) => setLibraryError(error instanceof Error ? error.message : "YouTube import failed"))
+                .finally(() => setLibraryBusy(false));
+            }}
+            onLoadToDeck={(track, deckId) => {
+              void loadTrackFromAsset(deckId, track);
+            }}
+          />
+          <StrategySelector
+            direction={recommendationDirection}
+            bias={recommendationBias}
+            targetMood={recommendationMood}
+            onDirectionChange={setRecommendationDirection}
+            onBiasChange={setRecommendationBias}
+            onMoodChange={setRecommendationMood}
+          />
+          <NextTrackPanel recommendations={recommendationResult} />
+        </aside>
       </main>
       <SessionAnalyticsPanel
         analytics={sessionAnalytics}
