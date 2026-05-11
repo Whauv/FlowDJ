@@ -1,13 +1,5 @@
-import type { FlowLightEvent, FlowLightSettings, PhraseSection, VirtualFixture } from "./types";
-
-const KEY_COLORS: Record<string, string> = {
-  "8A": "#3b82f6",
-  "8B": "#06b6d4",
-  "9A": "#8b5cf6",
-  "9B": "#ec4899",
-  "7A": "#22c55e",
-  "7B": "#14b8a6"
-};
+import { DEFAULT_PALETTES } from "./palettes";
+import type { FlowLightEvent, FlowLightSettings, LightingDecision, PhraseSection, VirtualFixture } from "./types";
 
 export const PHRASE_SCENE_MAP: Record<PhraseSection, string> = {
   intro: "Intro Bloom",
@@ -26,19 +18,84 @@ function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
 }
 
-function colorFromEvent(event: FlowLightEvent): string {
-  if (event.key && KEY_COLORS[event.key]) return KEY_COLORS[event.key];
+function hexToRgb(hex: string): [number, number, number] {
+  const clean = hex.replace("#", "");
+  return [
+    parseInt(clean.slice(0, 2), 16),
+    parseInt(clean.slice(2, 4), 16),
+    parseInt(clean.slice(4, 6), 16)
+  ];
+}
+
+function rgbToHex(r: number, g: number, b: number): string {
+  const part = (n: number) => n.toString(16).padStart(2, "0");
+  return `#${part(Math.round(clamp(nanGuard(r), 0, 255)))}${part(Math.round(clamp(nanGuard(g), 0, 255)))}${part(Math.round(clamp(nanGuard(b), 0, 255)))}`;
+}
+
+function nanGuard(v: number): number {
+  return Number.isFinite(v) ? v : 0;
+}
+
+function mixHex(a: string, b: string, t: number): string {
+  const [ar, ag, ab] = hexToRgb(a);
+  const [br, bg, bb] = hexToRgb(b);
+  return rgbToHex(ar + (br - ar) * t, ag + (bg - ag) * t, ab + (bb - ab) * t);
+}
+
+function energyColor(event: FlowLightEvent): string {
   if (event.marker === "drop") return "#f97316";
   if (event.marker === "build") return "#eab308";
   if (event.marker === "breakdown") return "#6366f1";
-  return "#22d3ee";
+  if (event.energy >= 7.5) return "#fb7185";
+  if (event.energy <= 4) return "#22d3ee";
+  return "#60a5fa";
+}
+
+function paletteFromKey(event: FlowLightEvent, settings: FlowLightSettings): { paletteId: string; paletteName: string; from: string; to: string; explanation: string } {
+  const key = event.key ?? "8A";
+  const group = key.replace(/[^0-9]/g, "") || "8";
+  const paletteId = settings.keyToPalette[group] ?? settings.paletteLibrary[0]?.id ?? DEFAULT_PALETTES[0].id;
+  const palette = settings.paletteLibrary.find((p) => p.id === paletteId) ?? settings.paletteLibrary[0] ?? DEFAULT_PALETTES[0];
+  return {
+    paletteId,
+    paletteName: palette.name,
+    from: palette.colors[0],
+    to: palette.colors[1],
+    explanation: `Key ${key} mapped to family ${group} -> ${palette.name}`
+  };
 }
 
 export function chooseSceneName(event: FlowLightEvent): string {
   return PHRASE_SCENE_MAP[event.phraseSection] ?? "Groove Pulse";
 }
 
-export function renderVirtualScene(event: FlowLightEvent, settings: FlowLightSettings): VirtualFixture[] {
+export function decideLightingColor(event: FlowLightEvent, settings: FlowLightSettings): LightingDecision {
+  if (!settings.keyAwareColoring) {
+    const color = energyColor(event);
+    return {
+      paletteId: "energy-only",
+      paletteName: "Energy Logic",
+      fromColor: color,
+      toColor: color,
+      blendedColor: color,
+      explanation: "Key-aware disabled: using energy/marker based color"
+    };
+  }
+
+  const mapped = paletteFromKey(event, settings);
+  const blendTarget = clamp01(event.crossfader);
+  const blended = mixHex(mapped.from, mapped.to, blendTarget);
+  return {
+    paletteId: mapped.paletteId,
+    paletteName: mapped.paletteName,
+    fromColor: mapped.from,
+    toColor: mapped.to,
+    blendedColor: blended,
+    explanation: `${mapped.explanation}; crossfader blend ${(blendTarget * 100).toFixed(0)}%`
+  };
+}
+
+export function renderVirtualScene(event: FlowLightEvent, settings: FlowLightSettings): { fixtures: VirtualFixture[]; decision: LightingDecision } {
   const bpmNorm = clamp(event.bpm / 140, 0.5, 1.35);
   const baseIntensity = clamp01((event.energy / 10) * settings.intensityScale);
   const crossBiasA = clamp01(1 - event.crossfader);
@@ -48,7 +105,7 @@ export function renderVirtualScene(event: FlowLightEvent, settings: FlowLightSet
   const dominantDeckBoostA = event.activeDeck === "A" ? 1 + settings.movementSensitivity * 0.35 : 1;
   const dominantDeckBoostB = event.activeDeck === "B" ? 1 + settings.movementSensitivity * 0.35 : 1;
 
-  const color = colorFromEvent(event);
+  const decision = decideLightingColor(event, settings);
   const sceneMultiplier = event.phraseSection === "drop" ? 1.2 : event.phraseSection === "breakdown" ? 0.75 : event.phraseSection === "outro" ? 0.6 : 1;
 
   const strobeAllowed = settings.allowStrobe && (!settings.strobeOnDropsOnly || event.marker === "drop" || event.phraseSection === "buildup");
@@ -64,42 +121,45 @@ export function renderVirtualScene(event: FlowLightEvent, settings: FlowLightSet
   const cappedCenter = Math.min(iCenter, settings.safetyLimit);
   const cappedBack = Math.min(iBack, settings.safetyLimit);
 
-  return [
-    {
-      id: "fx-1",
-      label: "Front Wash A",
-      intensity: cappedA,
-      color,
-      pan: Math.round(clamp(180 * crossBiasA + bpmNorm * settings.movementSensitivity * 8, 0, 180)),
-      tilt: Math.round(clamp(35 + beatPulse * 40, 10, 90)),
-      strobeHz: 0
-    },
-    {
-      id: "fx-2",
-      label: "Front Wash B",
-      intensity: cappedB,
-      color,
-      pan: Math.round(clamp(180 * crossBiasB - bpmNorm * settings.movementSensitivity * 8, 0, 180)),
-      tilt: Math.round(clamp(35 + beatPulse * 40, 10, 90)),
-      strobeHz: 0
-    },
-    {
-      id: "fx-3",
-      label: "Center Beam",
-      intensity: cappedCenter,
-      color,
-      pan: 90,
-      tilt: Math.round(clamp(20 + event.energy * 5 * settings.movementSensitivity, 10, 90)),
-      strobeHz: 0
-    },
-    {
-      id: "fx-4",
-      label: "Back Strobe",
-      intensity: cappedBack,
-      color: event.marker === "drop" ? "#ffffff" : color,
-      pan: 90,
-      tilt: 60,
-      strobeHz
-    }
-  ];
+  return {
+    decision,
+    fixtures: [
+      {
+        id: "fx-1",
+        label: "Front Wash A",
+        intensity: cappedA,
+        color: decision.blendedColor,
+        pan: Math.round(clamp(180 * crossBiasA + bpmNorm * settings.movementSensitivity * 8, 0, 180)),
+        tilt: Math.round(clamp(35 + beatPulse * 40, 10, 90)),
+        strobeHz: 0
+      },
+      {
+        id: "fx-2",
+        label: "Front Wash B",
+        intensity: cappedB,
+        color: decision.blendedColor,
+        pan: Math.round(clamp(180 * crossBiasB - bpmNorm * settings.movementSensitivity * 8, 0, 180)),
+        tilt: Math.round(clamp(35 + beatPulse * 40, 10, 90)),
+        strobeHz: 0
+      },
+      {
+        id: "fx-3",
+        label: "Center Beam",
+        intensity: cappedCenter,
+        color: decision.toColor,
+        pan: 90,
+        tilt: Math.round(clamp(20 + event.energy * 5 * settings.movementSensitivity, 10, 90)),
+        strobeHz: 0
+      },
+      {
+        id: "fx-4",
+        label: "Back Strobe",
+        intensity: cappedBack,
+        color: event.marker === "drop" ? "#ffffff" : decision.fromColor,
+        pan: 90,
+        tilt: 60,
+        strobeHz
+      }
+    ]
+  };
 }

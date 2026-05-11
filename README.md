@@ -1,58 +1,35 @@
-# FlowDJ (Phase 8 BPM + Phrase-Driven Lighting)
+# FlowDJ (Phase 9 Key-Aware + Mood-Aware Color System)
 
-FlowLight now runs a rule-based musical lighting engine synchronized to DJ playback state.
+FlowLight now includes harmonic color intelligence with full user control.
 
-## Phase 8 Features
-- BPM-driven movement speed
-- Beat-synced pulse behavior
-- Phrase-based scene changes
-- Distinct looks for:
-  - intro
-  - buildup
-  - drop
-  - breakdown
-  - outro
-- Deck-aware emphasis (dominant deck gets stronger focus)
-- Crossfader-aware blending of fixture emphasis
-- Intensity scaling from energy estimate
-- Optional strobe behavior gated to approved moments (build/drop)
-
-## Safety + Intentionality
-- No random flashing logic
-- Scene changes use deterministic phrase mapper
-- Strobe can be disabled globally
-- Safety intensity cap prevents overly aggressive output
-
-## User Controls (FlowLight Preview)
-- Movement sensitivity
-- Intensity scale
-- Beat pulse strength
-- Safety limit
-- Allow strobe toggle
-- Strobe only on drops/build toggle
+## Phase 9 Features
+- Key-to-color mapping engine using Camelot family groups
+- Preset palette library:
+  - Warm Club
+  - Neon Cyber
+  - Sunset Melodic
+  - Dark Warehouse
+- Mood preset mappings that remap key families to palette families
+- Custom mapping editor (group -> palette override)
+- Custom palette editor (editable colors per palette)
+- Smooth color blending during crossfades
+- Optional disable for key-aware coloring (energy-only color logic)
+- Explanation labels in UI showing why current palette/color is chosen
 
 ## Architecture
-### Rule engine
+- `frontend/src/modules/flowlight/palettes.ts`
+  - palette library + mood presets + default mapping
 - `frontend/src/modules/flowlight/sceneEngine.ts`
-  - phrase-to-scene mapper
-  - BPM/beat/crossfader/deck/energy-driven fixture rendering
-
-### State manager + adapters
+  - key/mood decision + blend logic + explanation strings
 - `frontend/src/modules/flowlight/manager.ts`
-  - event-driven state manager with live settings updates
-- `frontend/src/modules/flowlight/adapters.ts`
-  - DMX placeholder
-  - Philips Hue placeholder
-  - MIDI/clock placeholder
-
-### Event bus hookup
-- `frontend/src/modules/flowlight/eventBus.ts`
-- `frontend/src/app/App.tsx`
-  - publishes phrase/beat/deck state from live playback loop
-
-### Virtual preview
+  - runtime updates for presets/mappings/palette edits
+- `frontend/src/modules/flowlight/types.ts`
+  - settings + decision model contracts
 - `frontend/src/components/lighting/FlowLightPreviewPanel.tsx`
-  - virtual fixtures synced to playback
+  - strategy controls, custom editor, explanation display
 
-## Integration path for real hardware
-Real integrations should implement `LightOutputAdapter` (`connect`, `disconnect`, `sendState`) and be injected into `FlowLightManager`.
+## Behavior Notes
+- System is deterministic and user-configurable, not black-box.
+- Key-aware mode can be fully disabled for energy-based color logic.
+- Palette transitions are blended with crossfader position for musical continuity.
+- All mapping/palette decisions can be overridden by the user.

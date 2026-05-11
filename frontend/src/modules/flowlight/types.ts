@@ -13,6 +13,22 @@ export interface FlowLightEvent {
   key?: string;
 }
 
+export interface PaletteFamily {
+  id: string;
+  name: string;
+  colors: [string, string, string];
+}
+
+export interface KeyPaletteMapping {
+  [camelotGroup: string]: string;
+}
+
+export interface MoodPreset {
+  id: string;
+  label: string;
+  mapping: KeyPaletteMapping;
+}
+
 export interface FlowLightSettings {
   movementSensitivity: number;
   intensityScale: number;
@@ -20,6 +36,19 @@ export interface FlowLightSettings {
   safetyLimit: number;
   allowStrobe: boolean;
   strobeOnDropsOnly: boolean;
+  keyAwareColoring: boolean;
+  selectedMoodPreset: string;
+  keyToPalette: KeyPaletteMapping;
+  paletteLibrary: PaletteFamily[];
+}
+
+export interface LightingDecision {
+  paletteId: string;
+  paletteName: string;
+  fromColor: string;
+  toColor: string;
+  blendedColor: string;
+  explanation: string;
 }
 
 export interface VirtualFixture {
@@ -38,6 +67,7 @@ export interface FlowLightState {
   lastEvent: FlowLightEvent | null;
   phraseToScene: Record<PhraseSection, string>;
   settings: FlowLightSettings;
+  decision: LightingDecision;
 }
 
 export interface LightOutputAdapter {
