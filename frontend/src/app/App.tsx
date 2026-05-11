@@ -224,10 +224,18 @@ export function App() {
     const currentTime = activeDeck === "A" ? decks.A.currentTime : decks.B.currentTime;
     const beatLength = bpm > 0 ? 60 / bpm : 0.5;
     const beatPhase = ((currentTime % beatLength) / beatLength) % 1;
+    const duration = activeDeck === "A" ? decks.A.duration : decks.B.duration;
+    const normalized = duration > 0 ? currentTime / duration : 0;
     const phraseLength = beatLength * 32;
     const phraseProgress = (currentTime % phraseLength) / phraseLength;
-    const phraseSection = phraseProgress < 0.25 ? "build" : phraseProgress < 0.5 ? "drop" : phraseProgress < 0.75 ? "groove" : "breakdown";
-    const marker = phraseSection === "drop" ? "drop" : phraseSection === "build" ? "build" : phraseSection === "breakdown" ? "breakdown" : "none";
+    const phraseSection =
+      normalized < 0.12 ? "intro" :
+      normalized > 0.88 ? "outro" :
+      phraseProgress < 0.24 ? "buildup" :
+      phraseProgress < 0.48 ? "drop" :
+      phraseProgress < 0.72 ? "groove" :
+      "breakdown";
+    const marker = phraseSection === "drop" ? "drop" : phraseSection === "buildup" ? "build" : phraseSection === "breakdown" ? "breakdown" : "none";
     const key = activeDeck === "A" ? decks.A.musicalKey : decks.B.musicalKey;
     const energy = activeDeck === "A" ? decks.A.energy : decks.B.energy;
 
@@ -243,7 +251,7 @@ export function App() {
       key
     });
     setFlowLightState(flowLightManager.getState());
-  }, [activeDeck, crossfader, decks.A.bpm, decks.A.currentTime, decks.A.energy, decks.A.musicalKey, decks.B.bpm, decks.B.currentTime, decks.B.energy, decks.B.musicalKey]);
+  }, [activeDeck, crossfader, decks.A.bpm, decks.A.currentTime, decks.A.duration, decks.A.energy, decks.A.musicalKey, decks.B.bpm, decks.B.currentTime, decks.B.duration, decks.B.energy, decks.B.musicalKey]);
 
   const onLoadFile = useCallback(async (deckId: DeckId, file: File | null) => {
     if (!file) return;
@@ -376,7 +384,10 @@ export function App() {
           onMoodChange={setRecommendationMood}
         />
         <NextTrackPanel recommendations={recommendationResult} />
-        <FlowLightPreviewPanel state={flowLightState} />
+        <FlowLightPreviewPanel state={flowLightState} onSettingsChange={(next) => {
+          flowLightManager.updateSettings(next);
+          setFlowLightState(flowLightManager.getState());
+        }} />
       </main>
       <SessionAnalyticsPanel
         analytics={sessionAnalytics}
