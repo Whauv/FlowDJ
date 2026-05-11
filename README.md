@@ -1,26 +1,50 @@
-# FlowDJ (Phase 3 Keyboard-First UX)
+# FlowDJ (Phase 4 Guided Transitions + Beginner Assist)
 
-FlowDJ is a laptop-native DJ MVP built around keyboard-primary mixing.
+FlowDJ is a laptop-native DJ MVP built around keyboard-primary mixing, now extended with interpretable transition guidance.
 
-## Stack
-- Frontend: React + TypeScript + Vite + Zustand
-- Backend: FastAPI (Python)
-- Audio: Web Audio API + HTML media elements
+## New in Phase 4
+- Rule-based compatibility scoring for next-track suggestions using:
+  - BPM difference
+  - harmonic key compatibility (Camelot adjacency)
+  - energy mismatch
+- Suggested Next Track panel in mixer
+- Suggested transition actions in mixer area:
+  - start blend now
+  - enable 8-bar loop
+  - lower bass on outgoing deck
+  - swap decks at drop
+  - use echo out
+- Phrase-aware timing hint based on 8-bar boundary estimation
+- Safe Mix mode toggle to reduce risky transitions
+- Visual warnings for BPM/key/energy clashes
+- Explanation text for every recommendation
+- Example transition test cases for sample tracks
 
-## Phase 3 Features
-- Mode-aware keyboard system: Browse, Mix, FX, Recovery
-- Editable keybind profiles with conflict detection
-- Default profile + optional one-hand profile
-- Live on-screen shortcut legend for current mode
-- Keyboard mapping panel (`G`)
-- Onboarding/help overlay (`H`)
-- Debounced keyboard actions for reliability
-- Hold-to-trigger protection for dangerous recovery action
-- Recovery mode actions:
-  - Emergency fade
-  - Kill switch (hold)
-  - Safe transition
-- Profile persistence via backend config file (`backend/app/core/keyboard_profiles.json`)
+## Architecture (Phase 4 additions)
+- `frontend/src/modules/transitions/engine.ts`
+  - rule-based compatibility and transition hint engine
+- `frontend/src/modules/transitions/sampleTracks.ts`
+  - candidate track metadata set
+- `frontend/src/modules/transitions/testCases.ts`
+  - example test cases for recommendation behavior
+
+## How compatibility score works
+Compatibility score is weighted and interpretable:
+- BPM score: tempo gap penalty
+- Key score: exact/adjacent/non-harmonic mapping
+- Energy score: large energy jump penalty
+- Safe Mix mode applies extra penalties to risky candidates
+
+Each recommendation includes explanation text and warnings.
+
+## UI behavior
+- Suggestions update live as deck position changes.
+- Mixer shows:
+  - top candidate track + compatibility score
+  - explanation line
+  - warning chips/messages
+  - action guidance card with phrase hint
+- Safe Mix toggle changes recommendation ranking in real time.
 
 ## Run Frontend
 ```bash
@@ -38,45 +62,17 @@ pip install -e .
 uvicorn app.main:app --reload --port 8000
 ```
 
-## Keyboard Defaults
-### Global mode switching
-- `1`: Browse Mode
-- `2`: Mix Mode
-- `3`: FX Mode
-- `4`: Recovery Mode
-- `Tab`: Switch active deck
-- `H`: Help overlay
-- `G`: Key mapping panel
-
-### Browse Mode
-- `Q`/`P`: Load to Deck A/B
-- `Up`/`Down`: Library navigation placeholder
-- `/`: Search focus placeholder
-
-### Mix Mode
-- `Z`/`X`: Play/Pause Deck A/B
-- `C`: Cue set/jump
-- `V`: Sync active deck BPM to other deck
-- `Left`/`Right`: Seek active deck
-- `,`/`.`: Crossfader nudges
-- `B`/`N`: EQ low/high macro toggle
-- `L`: Loop in/out
-- `K`: Autoloop
-
-### FX Mode
-- `J`: FX slot 1
-- `K`: FX slot 2
-- `L`: Momentary FX toggle
-- `A`/`S`: Deck volume down/up
-
-### Recovery Mode
-- `F`: Emergency fade
-- `R` (hold): Kill switch
-- `T`: Safe transition
-- `N`/`M`: Master down/up
-
-## API
+## Existing API
 - `GET /health`
 - `GET /version`
 - `GET /keyboard-profiles`
 - `PUT /keyboard-profiles`
+
+## Example Test Cases
+Implemented in:
+- `frontend/src/modules/transitions/testCases.ts`
+
+Scenarios include:
+- Balanced house blend
+- Safe-mix conservative ranking
+- Energy-clash warning detection

@@ -14,6 +14,21 @@ import { fetchKeyboardProfiles, saveKeyboardProfiles } from "../services/api/key
 import { useAppStore } from "../state/useAppStore";
 import type { DeckId } from "../state/types";
 import { clampNormalized, runAudioStateSanityChecks } from "../state/utils/audioStateTestUtils";
+import { buildTransitionGuidance } from "../modules/transitions/engine";
+import { SAMPLE_TRACKS } from "../modules/transitions/sampleTracks";
+import { runTransitionTestCases } from "../modules/transitions/testCases";
+import type { TrackMeta } from "../modules/transitions/types";
+
+function deckToTrackMeta(deckId: DeckId, deck: { trackName: string; bpm: number; musicalKey: string; energy: number; duration: number }): TrackMeta {
+  return {
+    id: `deck-${deckId}`,
+    title: deck.trackName,
+    bpm: deck.bpm || 124,
+    key: deck.musicalKey || "8A",
+    energy: deck.energy || 5,
+    duration: deck.duration || 300
+  };
+}
 
 export function App() {
   const fileInputARef = useRef<HTMLInputElement>(null);
@@ -23,6 +38,7 @@ export function App() {
   const activeDeck = useAppStore((s) => s.activeDeck);
   const crossfader = useAppStore((s) => s.crossfader);
   const masterGain = useAppStore((s) => s.masterGain);
+  const safeMixMode = useAppStore((s) => s.safeMixMode);
   const fx = useAppStore((s) => s.fx);
   const eq = useAppStore((s) => s.eq);
   const profiles = useAppStore((s) => s.profiles);
@@ -36,6 +52,7 @@ export function App() {
   const setActiveDeck = useAppStore((s) => s.setActiveDeck);
   const setCrossfader = useAppStore((s) => s.setCrossfader);
   const setMasterGain = useAppStore((s) => s.setMasterGain);
+  const setSafeMixMode = useAppStore((s) => s.setSafeMixMode);
   const setFx = useAppStore((s) => s.setFx);
   const setEq = useAppStore((s) => s.setEq);
   const setProfiles = useAppStore((s) => s.setProfiles);
@@ -51,10 +68,38 @@ export function App() {
 
   const legendItems = useMemo(() => getLegendForMode(activeProfile, mode as FlowMode), [activeProfile, mode]);
 
+  const transitionGuidance = useMemo(() => {
+    const outgoingDeckId: DeckId = activeDeck === "A" ? "B" : "A";
+    const incomingDeckId: DeckId = activeDeck;
+    const outgoingDeck = decks[outgoingDeckId];
+    const incomingDeck = decks[incomingDeckId];
+
+    const source = deckToTrackMeta(outgoingDeckId, outgoingDeck.isLoaded ? outgoingDeck : incomingDeck);
+    const liveCandidate = incomingDeck.isLoaded
+      ? [deckToTrackMeta(incomingDeckId, incomingDeck)]
+      : [];
+
+    const candidates = [...liveCandidate, ...SAMPLE_TRACKS].filter((track) => track.title !== source.title);
+
+    return buildTransitionGuidance(
+      outgoingDeckId,
+      incomingDeckId,
+      source,
+      candidates,
+      outgoingDeck.currentTime,
+      safeMixMode
+    );
+  }, [activeDeck, decks, safeMixMode]);
+
   useEffect(() => {
     audioEngine.init();
     if (!runAudioStateSanityChecks()) {
       setLastAction("Audio state utility checks failed");
+    }
+    const testResults = runTransitionTestCases();
+    if (testResults.length > 0) {
+      // Keep this visible for manual QA during MVP phases.
+      console.table(testResults);
     }
   }, [setLastAction]);
 
@@ -98,6 +143,8 @@ export function App() {
       patchDeck(deckId, {
         trackName: file.name,
         bpm: analysis.bpm,
+        musicalKey: analysis.key,
+        energy: analysis.energy,
         waveform: analysis.waveform,
         duration: analysis.duration,
         currentTime: 0,
@@ -235,7 +282,7 @@ export function App() {
     }
   }, [crossfader, decks, eq.highCut, eq.lowCut, fx.momentaryActive, fx.slot1Active, fx.slot2Active, masterGain, onAutoloop, onCue, onGainChange, onLoop, onRecoveryEmergencyFade, onRecoveryKillSwitch, onRecoverySafeTransition, onSeekTo, onTogglePlay, patchDeck, setActiveDeck, setCrossfader, setEq, setFx, setLastAction, setMasterGain, setMode, setShowMappingPanel, setShowOnboarding]);
 
-  const onUpdateKey = useCallback((targetMode: FlowMode, action: string, nextCode: string, nextLabel: string) => {
+  const onUpdateKey = useCallback((targetMode: FlowMode, action: KeyboardAction, nextCode: string, nextLabel: string) => {
     const updatedProfiles = profiles.map((profile) => {
       if (profile.id !== selectedProfileId) return profile;
       const nextMappings = profile.mappings[targetMode].map((entry) =>
@@ -247,42 +294,23 @@ export function App() {
     setLastAction(`Updated mapping for ${action}`);
   }, [profiles, selectedProfileId, setLastAction, setProfiles]);
 
-  useKeyboardShortcuts({
-    mode: mode as FlowMode,
-    activeDeck,
-    profile: activeProfile,
-    onAction: handleKeyboardAction
-  });
+  useKeyboardShortcuts({ mode: mode as FlowMode, activeDeck, profile: activeProfile, onAction: handleKeyboardAction });
 
   return (
     <div className="app-shell">
       <TopBar mode={mode} activeDeck={activeDeck} lastAction={lastAction} audioStatus={audioEngine.getStatus()} />
       <main className="main-layout">
-        <DeckPanel
-          deck={decks.A}
-          isActive={activeDeck === "A"}
-          fileInputRef={fileInputARef}
-          onSelect={setActiveDeck}
-          onLoadFile={onLoadFile}
-          onTogglePlay={onTogglePlay}
-          onSeekTo={onSeekTo}
-          onGainChange={onGainChange}
-          onCue={onCue}
-          onLoop={onLoop}
+        <DeckPanel deck={decks.A} isActive={activeDeck === "A"} fileInputRef={fileInputARef} onSelect={setActiveDeck} onLoadFile={onLoadFile} onTogglePlay={onTogglePlay} onSeekTo={onSeekTo} onGainChange={onGainChange} onCue={onCue} onLoop={onLoop} />
+        <DeckPanel deck={decks.B} isActive={activeDeck === "B"} fileInputRef={fileInputBRef} onSelect={setActiveDeck} onLoadFile={onLoadFile} onTogglePlay={onTogglePlay} onSeekTo={onSeekTo} onGainChange={onGainChange} onCue={onCue} onLoop={onLoop} />
+        <MixerPanel
+          crossfader={crossfader}
+          masterGain={masterGain}
+          safeMixMode={safeMixMode}
+          guidance={transitionGuidance}
+          onCrossfaderChange={setCrossfader}
+          onMasterGainChange={setMasterGain}
+          onSafeMixToggle={setSafeMixMode}
         />
-        <DeckPanel
-          deck={decks.B}
-          isActive={activeDeck === "B"}
-          fileInputRef={fileInputBRef}
-          onSelect={setActiveDeck}
-          onLoadFile={onLoadFile}
-          onTogglePlay={onTogglePlay}
-          onSeekTo={onSeekTo}
-          onGainChange={onGainChange}
-          onCue={onCue}
-          onLoop={onLoop}
-        />
-        <MixerPanel crossfader={crossfader} masterGain={masterGain} onCrossfaderChange={setCrossfader} onMasterGainChange={setMasterGain} />
         <WaveformPanel deckA={decks.A} deckB={decks.B} />
         <KeyboardLegend modeLabel={mode.toUpperCase()} items={legendItems} />
         <LibraryPanel />

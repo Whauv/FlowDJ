@@ -46,6 +46,8 @@ export function DeckPanel({
       {deck.error ? <p className="error-text">{deck.error}</p> : null}
       <div className="row">
         <span className="pill">BPM: {deck.bpm || "--"}</span>
+        <span className="pill">Key: {deck.musicalKey || "--"}</span>
+        <span className="pill">Energy: {deck.energy.toFixed(1)}</span>
         <span className="pill">State: {deck.isPlaying ? "Playing" : "Paused"}</span>
         <span className="pill">Cue: {deck.cuePoint === null ? "--" : formatTime(deck.cuePoint)}</span>
       </div>
