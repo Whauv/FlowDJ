@@ -1,4 +1,4 @@
-from app.api.schemas import RecommendationBias, RecommendationDirection, RecommendationItem, RecommendationRequest, RecommendationResponse, RecommendationTrack
+from app.api.schemas import RecommendationBias, RecommendationDirection, RecommendationItem, RecommendationRequest, RecommendationResponse
 
 CAMELOT_NEIGHBORS = {
     "1A": {"12A", "2A", "1B"}, "2A": {"1A", "3A", "2B"}, "3A": {"2A", "4A", "3B"},
