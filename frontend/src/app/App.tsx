@@ -267,6 +267,22 @@ export function App() {
   }, [activeDeck, crossfader, decks.A.bpm, decks.A.currentTime, decks.A.duration, decks.A.energy, decks.A.musicalKey, decks.B.bpm, decks.B.currentTime, decks.B.duration, decks.B.energy, decks.B.musicalKey]);
 
   useEffect(() => {
+    const active = decks[activeDeck];
+    const payload = {
+      updatedAt: Date.now(),
+      mode,
+      activeDeck,
+      crossfader,
+      deckA: { bpm: decks.A.bpm, progress: decks.A.duration > 0 ? decks.A.currentTime / decks.A.duration : 0, playing: decks.A.isPlaying },
+      deckB: { bpm: decks.B.bpm, progress: decks.B.duration > 0 ? decks.B.currentTime / decks.B.duration : 0, playing: decks.B.isPlaying },
+      flowLightScene: flowLightState.sceneName,
+      analyticsState: sessionAnalytics ? "Session finalized" : "Live session",
+      activeTrack: active.trackName
+    };
+    window.localStorage.setItem("flowdj_landing_telemetry", JSON.stringify(payload));
+  }, [activeDeck, crossfader, decks.A.bpm, decks.A.currentTime, decks.A.duration, decks.A.isPlaying, decks.B.bpm, decks.B.currentTime, decks.B.duration, decks.B.isPlaying, flowLightState.sceneName, mode, sessionAnalytics, decks]);
+
+  useEffect(() => {
     const interval = window.setInterval(() => {
       setAdapterDiagnostics(flowLightManager.getDiagnostics());
     }, 1000);
