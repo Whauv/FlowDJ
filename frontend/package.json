@@ -15,10 +15,15 @@
     "zustand": "^4.5.5"
   },
   "devDependencies": {
+    "@eslint/js": "^9.0.0",
+    "@playwright/test": "^1.53.0",
     "@types/react": "^18.3.3",
     "@types/react-dom": "^18.3.0",
+    "@typescript-eslint/eslint-plugin": "^8.59.3",
+    "@typescript-eslint/parser": "^8.59.3",
     "@vitejs/plugin-react": "^4.3.1",
-    "@playwright/test": "^1.53.0",
+    "eslint": "^9.0.0",
+    "globals": "^17.6.0",
     "typescript": "^5.5.4",
     "vite": "^5.4.0"
   }
