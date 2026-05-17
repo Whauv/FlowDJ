@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 500" fill="none">
+  <rect width="1200" height="500" fill="#0b121d"/>
+  <path d="M80 250 H300 L340 210 H560 L600 250 H820 L860 210 H1120" stroke="#53d6ff" stroke-width="3"/>
+  <circle cx="300" cy="250" r="8" fill="#53d6ff"/>
+  <circle cx="560" cy="210" r="8" fill="#53d6ff"/>
+  <circle cx="820" cy="250" r="8" fill="#53d6ff"/>
+  <text x="90" y="220" fill="#d9e7f5" font-size="24" font-family="Inter">Deck A</text>
+  <text x="350" y="180" fill="#d9e7f5" font-size="24" font-family="Inter">Mixer</text>
+  <text x="620" y="220" fill="#d9e7f5" font-size="24" font-family="Inter">FlowLight</text>
+  <text x="890" y="180" fill="#d9e7f5" font-size="24" font-family="Inter">Analytics</text>
+</svg>

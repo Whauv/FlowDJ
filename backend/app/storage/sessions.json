@@ -1,0 +1,60 @@
+{
+  "sessions": [
+    {
+      "id": "session-20260511-184720",
+      "started_at_iso": "2026-05-11T18:47:20.307Z",
+      "ended_at_iso": "",
+      "timeline": [],
+      "transitions": [],
+      "analytics": null
+    },
+    {
+      "id": "session-20260511-184720",
+      "started_at_iso": "2026-05-11T18:47:20.311Z",
+      "ended_at_iso": "",
+      "timeline": [],
+      "transitions": [],
+      "analytics": null
+    },
+    {
+      "id": "session-20260511-185842",
+      "started_at_iso": "2026-05-11T18:58:42.235Z",
+      "ended_at_iso": "",
+      "timeline": [],
+      "transitions": [],
+      "analytics": null
+    },
+    {
+      "id": "session-20260511-185921",
+      "started_at_iso": "2026-05-11T18:59:21.241Z",
+      "ended_at_iso": "",
+      "timeline": [],
+      "transitions": [],
+      "analytics": null
+    },
+    {
+      "id": "session-20260511-185952",
+      "started_at_iso": "2026-05-11T18:59:52.351Z",
+      "ended_at_iso": "",
+      "timeline": [],
+      "transitions": [],
+      "analytics": null
+    },
+    {
+      "id": "session-20260517-153916",
+      "started_at_iso": "2026-05-17T15:39:15.598Z",
+      "ended_at_iso": "",
+      "timeline": [],
+      "transitions": [],
+      "analytics": null
+    },
+    {
+      "id": "session-20260517-162607",
+      "started_at_iso": "2026-05-17T16:26:06.933Z",
+      "ended_at_iso": "",
+      "timeline": [],
+      "transitions": [],
+      "analytics": null
+    }
+  ]
+}
