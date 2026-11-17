@@ -1,1 +1,0 @@
-"""FlowLight adapter service."""

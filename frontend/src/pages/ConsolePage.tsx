@@ -19,9 +19,9 @@ import { fetchKeyboardProfiles, saveKeyboardProfiles } from "../services/api/key
 import { appendSession, exportSessionCsv, exportSessionJson, finalizeSession, startSession } from "../services/api/sessionApi";
 import { fetchNextRecommendations, fetchRecommendationFixtures } from "../services/api/recommendationApi";
 import { fetchTrackAssets, importYoutubeMp3, uploadOwnedMp3, type TrackAsset } from "../services/api/trackSourcesApi";
-import { useAppStore } from "../state/useAppStore";
-import type { DeckId } from "../state/types";
-import { clampNormalized, runAudioStateSanityChecks } from "../state/utils/audioStateTestUtils";
+import { useAppStore } from "../store/deckStore";
+import type { DeckId } from "../store/types";
+import { clampNormalized, runAudioStateSanityChecks } from "../store/audioMath";
 import { buildTransitionGuidance } from "../modules/transitions/engine";
 import { SAMPLE_TRACKS } from "../modules/transitions/sampleTracks";
 import { runTransitionTestCases } from "../modules/transitions/testCases";

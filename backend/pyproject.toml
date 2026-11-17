@@ -10,6 +10,28 @@ dependencies = [
     "yt-dlp>=2025.1.0"
 ]
 
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "ruff>=0.6",
+    "httpx>=0.27"
+]
+
 [build-system]
 requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["app*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.ruff]
+target-version = "py311"
+line-length = 120
+
+[tool.ruff.lint]
+# Keep Ruff's default rule set (E, F) so existing code stays green.
+# Broader rules (import sorting, etc.) can be enabled in a later cleanup pass.

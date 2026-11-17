@@ -9,21 +9,22 @@ from app.api.schemas import (
     SessionTimelinePoint,
     SessionTransitionEvent,
 )
+from app.storage import json_store
 
-SESSIONS_PATH = Path(__file__).resolve().parent / "sessions.json"
+
+def _sessions_path() -> Path:
+    return json_store.data_path("sessions.json")
 
 
 def _load_raw() -> dict:
-    if not SESSIONS_PATH.exists():
-        return {"sessions": []}
     try:
-        return json.loads(SESSIONS_PATH.read_text(encoding="utf-8"))
+        return json_store.read_json(_sessions_path(), {"sessions": []})
     except json.JSONDecodeError:
         return {"sessions": []}
 
 
 def _save_raw(data: dict) -> None:
-    SESSIONS_PATH.write_text(json.dumps(data, indent=2), encoding="utf-8")
+    json_store.write_json(_sessions_path(), data)
 
 
 def _now_id() -> str:

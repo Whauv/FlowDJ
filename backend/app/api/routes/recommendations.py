@@ -1,16 +1,15 @@
-import json
-from pathlib import Path
 from fastapi import APIRouter
+
 from app.api.schemas import RecommendationRequest, RecommendationResponse, RecommendationTrack
 from app.services.recommendation import recommend_tracks
+from app.storage import json_store
 
 router = APIRouter()
-FIXTURE_PATH = Path(__file__).resolve().parents[2] / "storage" / "recommendation_fixtures.json"
 
 
 @router.get("/recommendations/fixtures", response_model=list[RecommendationTrack])
 def recommendation_fixtures() -> list[RecommendationTrack]:
-    raw = json.loads(FIXTURE_PATH.read_text(encoding="utf-8"))
+    raw = json_store.read_json(json_store.data_path("recommendation_fixtures.json"), [])
     return [RecommendationTrack.model_validate(item) for item in raw]
 
 

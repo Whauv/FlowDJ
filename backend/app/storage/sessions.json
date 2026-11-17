@@ -55,6 +55,46 @@
       "timeline": [],
       "transitions": [],
       "analytics": null
+    },
+    {
+      "id": "session-20261115-071745",
+      "started_at_iso": "2026-11-15T07:17:45.437Z",
+      "ended_at_iso": "",
+      "timeline": [],
+      "transitions": [],
+      "analytics": null
+    },
+    {
+      "id": "session-20261115-071913",
+      "started_at_iso": "2026-11-15T07:19:13.911Z",
+      "ended_at_iso": "",
+      "timeline": [],
+      "transitions": [],
+      "analytics": null
+    },
+    {
+      "id": "session-20261117-212810",
+      "started_at_iso": "2026-11-17T21:28:10.538Z",
+      "ended_at_iso": "",
+      "timeline": [],
+      "transitions": [],
+      "analytics": null
+    },
+    {
+      "id": "session-20261117-213047",
+      "started_at_iso": "2026-11-17T21:30:47.290Z",
+      "ended_at_iso": "",
+      "timeline": [],
+      "transitions": [],
+      "analytics": null
+    },
+    {
+      "id": "session-20261117-213104",
+      "started_at_iso": "2026-11-17T21:31:04.735Z",
+      "ended_at_iso": "",
+      "timeline": [],
+      "transitions": [],
+      "analytics": null
     }
   ]
 }
