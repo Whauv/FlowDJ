@@ -1,9 +1,10 @@
 from fastapi import APIRouter
-from .tracks import router as tracks_router
-from .session import router as session_router
-from .recommendations import router as recommendations_router
-from .keyboard import router as keyboard_router
+
 from .analytics import router as analytics_router
+from .keyboard import router as keyboard_router
+from .recommendations import router as recommendations_router
+from .session import router as session_router
+from .tracks import router as tracks_router
 
 router = APIRouter()
 router.include_router(tracks_router)

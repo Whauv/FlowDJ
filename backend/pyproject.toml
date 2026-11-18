@@ -33,5 +33,6 @@ target-version = "py311"
 line-length = 120
 
 [tool.ruff.lint]
-# Keep Ruff's default rule set (E, F) so existing code stays green.
-# Broader rules (import sorting, etc.) can be enabled in a later cleanup pass.
+# Default rules (E, F) plus import sorting (I), pyupgrade (UP), and bugbear (B)
+# to match CI enforcement.
+extend-select = ["I", "UP", "B", "BLE"]

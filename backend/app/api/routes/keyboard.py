@@ -1,4 +1,5 @@
 from fastapi import APIRouter
+
 from app.api.schemas import KeyboardProfilesPayload
 from app.services.keyboard_profiles import load_keyboard_profiles, save_keyboard_profiles
 

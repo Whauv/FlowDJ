@@ -2,7 +2,6 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, HttpUrl
 
-
 ModeName = Literal["browse", "mix", "fx", "recovery"]
 RecommendationDirection = Literal["build_energy", "maintain_groove", "cool_down", "surprise_switch"]
 RecommendationBias = Literal["safe", "balanced", "adventurous"]

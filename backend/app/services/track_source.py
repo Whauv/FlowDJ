@@ -8,7 +8,7 @@ from fastapi import HTTPException, UploadFile
 
 try:
     from yt_dlp import YoutubeDL
-except Exception:  # pragma: no cover
+except ImportError:  # pragma: no cover
     YoutubeDL = None
 
 

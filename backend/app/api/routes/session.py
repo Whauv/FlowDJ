@@ -1,5 +1,6 @@
 from fastapi import APIRouter, HTTPException, Response
-from app.api.schemas import SessionAppendRequest, SessionAnalyticsPayload, SessionCreateRequest, SessionFinalizeRequest
+
+from app.api.schemas import SessionAnalyticsPayload, SessionAppendRequest, SessionCreateRequest, SessionFinalizeRequest
 from app.services.analytics import (
     append_session_data,
     create_session,

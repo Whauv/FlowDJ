@@ -1,7 +1,7 @@
 import csv
 import io
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from app.api.schemas import (
@@ -28,7 +28,7 @@ def _save_raw(data: dict) -> None:
 
 
 def _now_id() -> str:
-    return datetime.now(timezone.utc).strftime("session-%Y%m%d-%H%M%S")
+    return datetime.now(UTC).strftime("session-%Y%m%d-%H%M%S")
 
 
 def create_session(started_at_iso: str) -> str:
