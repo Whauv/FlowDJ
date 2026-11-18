@@ -3,17 +3,21 @@ from pathlib import Path
 from typing import Any
 
 from app.api.schemas import KeyboardProfilesPayload
+from app.storage import json_store
 
-CONFIG_PATH = Path(__file__).resolve().parent / "keyboard_profiles.json"
+
+def _config_path() -> Path:
+    return json_store.data_path("keyboard_profiles.json")
 
 
 def load_keyboard_profiles(default_payload: KeyboardProfilesPayload) -> KeyboardProfilesPayload:
-    if not CONFIG_PATH.exists():
+    path = _config_path()
+    if not path.exists():
         save_keyboard_profiles(default_payload)
         return default_payload
 
     try:
-        content = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
+        content = json_store.read_json(path, None)
         return KeyboardProfilesPayload.model_validate(content)
     except (json.JSONDecodeError, ValueError):
         save_keyboard_profiles(default_payload)
@@ -21,10 +25,7 @@ def load_keyboard_profiles(default_payload: KeyboardProfilesPayload) -> Keyboard
 
 
 def save_keyboard_profiles(payload: KeyboardProfilesPayload) -> None:
-    CONFIG_PATH.write_text(
-        json.dumps(payload.model_dump(), indent=2),
-        encoding="utf-8",
-    )
+    json_store.write_json(_config_path(), payload.model_dump())
 
 
 def to_payload(data: dict[str, Any]) -> KeyboardProfilesPayload:

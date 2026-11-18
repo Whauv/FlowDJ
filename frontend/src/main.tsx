@@ -1,7 +1,7 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
-import { App } from "./app/App";
-import { LandingPage } from "./app/LandingPage";
+import { App } from "./pages/ConsolePage";
+import { LandingPage } from "./pages/LandingPage";
 import "./styles/globals.css";
 import "./styles/landing.css";
 

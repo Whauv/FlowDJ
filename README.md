@@ -68,20 +68,21 @@ This repository now includes:
 FlowDJ/
   frontend/
     src/
-      app/
       components/
       modules/
         analytics/
         transitions/
         recommendations/
         flowlight/
+      pages/
       services/
-      state/
+      store/
       styles/
   backend/
     app/
       api/
-      core/
+      services/
+      storage/
 ```
 
 ## Run Locally
@@ -109,6 +110,25 @@ Backend defaults to `http://localhost:8000`
 ### Optional: YouTube MP3 import prerequisites
 YouTube import uses `yt-dlp` and requires `ffmpeg` available on your system path for mp3 extraction.
 If `ffmpeg` is missing, local MP3 upload still works and the app remains fully usable.
+
+## Testing
+
+```bash
+# Backend: lint + API tests (install dev extras first: pip install -e ".[dev]")
+cd backend
+ruff check app tests
+pytest
+
+# Frontend: unit tests (Vitest) and the production build/typecheck
+cd frontend
+npm test
+npm run build
+
+# Frontend: Playwright visual regression (downloads browsers on first run)
+npm run test:visual
+```
+
+CI runs the backend lint + tests and the frontend lint + build + unit tests on every push/PR to `main`.
 
 ## Key Backend Endpoints
 

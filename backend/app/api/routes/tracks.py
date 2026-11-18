@@ -1,4 +1,7 @@
+from typing import Annotated
+
 from fastapi import APIRouter, File, UploadFile
+
 from app.api.schemas import TrackAsset, YoutubeImportRequest
 from app.services.track_source import import_youtube_as_mp3, list_tracks, save_uploaded_mp3
 
@@ -11,7 +14,7 @@ def get_tracks() -> list[TrackAsset]:
 
 
 @router.post("/tracks/upload", response_model=TrackAsset)
-async def upload_track(file: UploadFile = File(...)) -> TrackAsset:
+async def upload_track(file: Annotated[UploadFile, File()]) -> TrackAsset:
     track = await save_uploaded_mp3(file)
     return TrackAsset.model_validate(track)
 
